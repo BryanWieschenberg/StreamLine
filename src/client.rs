@@ -1,3 +1,35 @@
+use std::io::{self, BufRead, BufReader, Write};
+use std::net::TcpStream;
+use std::thread;
+
 fn main() {
-    println!("Hello, world!sss");
+    let port = 9001;
+    let stream = TcpStream::connect(format!("127.0.0.1:{}", port)).expect("Failed to connect");
+    let mut write_stream = stream.try_clone().expect("Clone failed");
+    
+    println!("Welcome to Chatterbox! You can type messages to other people connected.");
+
+    // Read from server
+    thread::spawn(move || {
+        let reader = BufReader::new(stream);
+        for line in reader.lines() {
+            if let Ok(msg) = line {
+                println!("{}", msg);
+            }
+        }
+    });
+
+    // Write to server
+    let stdin = io::stdin();
+    for line in stdin.lock().lines() {
+        let msg = line.unwrap();
+        if msg.trim() == "/exit" || msg.trim() == "\\q" {
+            println!("Disconnecting...");
+            break;
+        }
+        if write_stream.write_all(msg.as_bytes()).is_err() {
+            break;
+        }
+        let _ = write_stream.write_all(b"\n");
+    }
 }
