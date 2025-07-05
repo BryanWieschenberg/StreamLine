@@ -7,7 +7,13 @@ fn main() {
     let stream = TcpStream::connect(format!("127.0.0.1:{}", port)).expect("Failed to connect");
     let mut write_stream = stream.try_clone().expect("Clone failed");
     
-    println!("Welcome to Chatterbox! You can type messages to other people connected.");
+    println!("Welcome to Chatterbox! Please enter your username:");
+    let mut username = String::new();
+    let _ = io::stdout().flush();
+
+    io::stdin().read_line(&mut username).unwrap();
+    let _ = write_stream.write_all(username.trim().as_bytes());
+    write_stream.write_all(b"\n").unwrap();
 
     // Read from server
     thread::spawn(move || {
