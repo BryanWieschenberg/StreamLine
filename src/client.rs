@@ -2,6 +2,9 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::thread;
 
+mod commands;
+use commands::{handle_cmd, CommandResult};
+
 // Function to handle receiving messages from the server
 fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
     let reader = BufReader::new(stream);
@@ -39,14 +42,13 @@ fn main() -> std::io::Result<()> {
     for line in stdin.lock().lines() {
         let msg = line?.trim().to_string();
         
-        // If the user types "/exit", safely close the connection and exit
-        if msg == "/exit" {
-            println!("[!] Exiting...");
-            stream.shutdown(std::net::Shutdown::Both)?;
-            break;
+        // Handles sending input to the server
+        match handle_cmd(&msg, &mut stream)? {
+            CommandResult::Exit => break,
+            CommandResult::Handled => continue,
+            CommandResult::NotACommand => {}
         }
 
-        // Writes the message to the server with a newline
         stream.write_all(msg.as_bytes())?;
         stream.write_all(b"\n")?;
     }
