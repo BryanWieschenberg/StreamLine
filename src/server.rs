@@ -2,20 +2,43 @@ use std::io::{BufReader, BufRead, Write};
 use std::sync::{Arc, Mutex};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::thread;
-// use std::io::{BufRead, BufReader, Write};
 
-// Lockable vector of connected TCP clients safely shared across threads
-type Clients = Arc<Mutex<Vec<TcpStream>>>;
+struct Client {
+    stream: TcpStream,
+    username: String
+}
+
+// Lockable vector of connected clients safely shared across threads
+type Clients = Arc<Mutex<Vec<Client>>>;
 
 // Handler for each client connection on a separate thread
 fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::io::Result<()> {
-    let reader = BufReader::new(stream);
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut username = String::new();
+    reader.read_line(&mut username)?;
+    let username = username.trim().to_string();
+    let username_clone = username.clone();
+    println!("Client connected: {username} ({peer})");
+
+    {
+        let mut locked = match clients.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("Failed to lock clients: {poisoned}");
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned"));
+            }
+        };
+        locked.push(Client {
+            stream: stream.try_clone()?,
+            username
+        });
+    }
 
     // Read messages from the client and broadcast them to all other clients
     for line in reader.lines() {
         let msg = match line {
             Ok(msg) => {
-                println!("{peer}: {msg}");
+                println!("{username_clone} ({peer}): {msg}");
                 msg
             }
             Err(e) => {
@@ -32,12 +55,13 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
                 break;
             }
         };
-        locked.retain(|s| s.peer_addr().is_ok());
+        locked.retain(|client| client.stream.peer_addr().is_ok());
 
         // Broadcast the message to all other clients
         for client in locked.iter_mut() {
-            if client.peer_addr()? != peer {
-                let _ = writeln!(client, "{peer}: {msg}");
+            if client.stream.peer_addr()? != peer {
+                let name = &client.username;
+                let _ = writeln!(client.stream, "{name}: {msg}");
             }
         }
     }
@@ -57,19 +81,6 @@ fn main() -> std::io::Result<()> {
         match stream {
             Ok(stream) => {
                 let peer = stream.peer_addr()?;
-                println!("Client connected: {peer}");
-
-                // Push stream clone into the clients vector since the original will be moved into the thread
-                {
-                    let mut locked = match clients.lock() {
-                        Ok(guard) => guard,
-                        Err(poisoned) => {
-                            eprintln!("Failed to lock clients: {poisoned}");
-                            continue;
-                        }
-                    };
-                    locked.push(stream.try_clone()?);
-                }
 
                 // Clone clients Arc and use the clone in the thread
                 let clients_ref = Arc::clone(&clients);

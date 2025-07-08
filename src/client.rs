@@ -24,13 +24,22 @@ fn main() -> std::io::Result<()> {
     let mut stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
     let stream_clone = stream.try_clone()?;
 
+    println!("Enter your username:");
+    let mut username = String::new();
+    io::stdin().read_line(&mut username)?;
+    stream.write_all(username.trim().as_bytes())?;
+    stream.write_all(b"\n")?;
+    
     thread::spawn(move || handle_recv(stream_clone));
 
     // Handles sending messages to the server
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
-        let msg = line?;
-
+        let msg = line?.trim().to_string();
+        if msg == "/exit" {
+            println!("[!] Exiting...");
+            break;
+        }
         // Writes the message to the server with a newline
         if stream.write_all(msg.as_bytes()).is_err() {
             break;
