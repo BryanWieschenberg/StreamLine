@@ -38,6 +38,10 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
     for line in reader.lines() {
         let msg = match line {
             Ok(msg) => {
+                let msg = msg.trim().to_string();
+                if msg == "/exit" {
+                    break;
+                }
                 println!("{username_clone} ({peer}): {msg}");
                 msg
             }
@@ -60,11 +64,12 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
         // Broadcast the message to all other clients
         for client in locked.iter_mut() {
             if client.stream.peer_addr()? != peer {
-                let name = &client.username;
-                let _ = writeln!(client.stream, "{name}: {msg}");
+                let _ = writeln!(client.stream, "{username_clone}: {msg}");
             }
         }
     }
+
+    println!("{username_clone} ({peer}) disconnected");
 
     Ok(())
 }
