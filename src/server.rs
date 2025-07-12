@@ -16,8 +16,8 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut username = String::new();
     reader.read_line(&mut username)?;
-    let username = username.trim().to_string();
-    let username_clone = username.clone();
+    let mut username = username.trim().to_string();
+    let mut username_clone = username.clone();
     println!("Client connected: {username} ({peer})");
 
     {

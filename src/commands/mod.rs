@@ -31,7 +31,20 @@ pub fn handle_cmd(input: &str, stream: &mut TcpStream) -> io::Result<CommandResu
             Ok(CommandResult::Handled)
         }
         Command::Help => {
-            println!("{}", "Available commands: /exit /ping /help".green());
+            println!("{}", "
+                Available commands:\n
+                /exit OR /quit -> Exits the program\n
+                /leave -> Leaves your current room\n
+                /join (room name) -> Joins the specified room number or name\n
+                /ping -> Checks your connection\n
+                /users OR /room -> Shows all users currently in your room
+                /perm (username)
+                /perm (username) +/-(permissions) -> Adds (+) or revokes (-) the specified 
+                /perms -> 
+                /nick OR /rename -> Changes your username
+                /msg OR /whisper -> Privately messages a user currently in your room
+                /help -> Shows all available commands
+            ".green());
             Ok(CommandResult::Handled)
         }
         Command::Exit => {

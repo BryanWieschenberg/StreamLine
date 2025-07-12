@@ -1,0 +1,24 @@
+{
+    "rooms": {
+        "room1": {
+            "name": "room1",
+            "whitelist_enabled": true,
+            "whitelist": ["bryan", "alice"],
+            "permissions": {
+                "user": ["status", "msg", "me"],
+                "mod": ["status", "msg", "me", "mod.kick", "mod.ban"],
+                "admin": ["*"]
+            }
+        },
+        "room2": {
+            "name": "room2",
+            "whitelist_enabled": false,
+            "whitelist": [],
+            "permissions": {
+                "user": ["status", "msg"],
+                "mod": ["mod.kick"],
+                "admin": ["*"]
+            }
+        }
+    }
+}

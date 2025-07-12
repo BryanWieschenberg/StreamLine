@@ -1,0 +1,15 @@
+{
+    "users": {
+        "bryan": {
+            "password_hash": "$2b$12$....",
+            "rooms": {
+                "room1": "admin",
+                "room2": "mod"
+            },
+            "nickname": "b",
+            "color": "#88ff00",
+            "hidden": false,
+            "ignored": ["someUser"]
+        }
+    }
+}
