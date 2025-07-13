@@ -2,6 +2,12 @@ use std::io::{BufReader, BufRead, Write};
 use std::sync::{Arc, Mutex};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::thread;
+mod state;
+// use crate::state::{types::*, manager::*, default::*};
+
+mod commands;
+// use crate::commands::parser::Command;
+// use crate::commands::dispatcher::{dispatch_command, CommandResult};
 
 struct Client {
     stream: TcpStream,

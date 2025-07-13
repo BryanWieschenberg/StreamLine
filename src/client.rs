@@ -1,9 +1,12 @@
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::thread;
+mod state;
+// use crate::state::{types::*, manager::*, default::*};
 
 mod commands;
-use commands::{handle_cmd, CommandResult};
+use crate::commands::parser::{Command, parse_command};
+use crate::commands::dispatcher::{dispatch_command, CommandResult};
 
 // Function to handle receiving messages from the server
 fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
@@ -43,7 +46,9 @@ fn main() -> std::io::Result<()> {
         let msg = line?.trim().to_string();
         
         // Handles sending input to the server
-        match handle_cmd(&msg, &mut stream)? {
+        let command: Command = parse_command(&msg);
+
+        match dispatch_command(command, &mut stream)? {
             CommandResult::Exit => break,
             CommandResult::Handled => continue,
             CommandResult::NotACommand => {}

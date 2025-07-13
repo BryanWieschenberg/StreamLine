@@ -1,23 +1,41 @@
 {
-    "rooms": {
-        "room1": {
-            "name": "room1",
-            "whitelist_enabled": true,
-            "whitelist": ["bryan", "alice"],
-            "permissions": {
-                "user": ["status", "msg", "me"],
-                "mod": ["status", "msg", "me", "mod.kick", "mod.ban"],
-                "admin": ["*"]
+    "general": {
+        "creator": "bryan",
+        "whitelist_enabled": false,
+        "whitelist": [],
+        "roles": {
+            "mod": ["afk", "uptime", "sendfile", "msg", "me", "super.users", "user", "log", "mod"],
+            "user": ["afk", "uptime", "sendfile", "msg", "me", "user", "log"],
+            "colors": {
+                "admin": "#FFF000",
+                "mod": "#0000FF",
+                "user": "#FFFFFF"
             }
         },
-        "room2": {
-            "name": "room2",
-            "whitelist_enabled": false,
-            "whitelist": [],
-            "permissions": {
-                "user": ["status", "msg"],
-                "mod": ["mod.kick"],
-                "admin": ["*"]
+        "users": {
+            "Bryan": {
+                "nick": "Bry",
+                "color": "#0080FF",
+                "role": "admin",
+                "hidden": false,
+                "muted": "",
+                "banned": ""
+            },
+            "louduser": {
+                "nick": "",
+                "color": "",
+                "role": "user",
+                "hidden": false,
+                "muted": "2024-07-15T22:00:00Z",
+                "banned": ""
+            },
+            "spammer123": {
+                "nick": "",
+                "color": "",
+                "role": "user",
+                "hidden": false,
+                "muted": "",
+                "banned": "*"
             }
         }
     }
