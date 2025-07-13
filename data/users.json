@@ -1,14 +1,27 @@
 {
+    "Balls": {
+        "ignore": [],
+        "password": "3ae8cbcfc3b2676d67320cd6f0061a45de3b87e3b5d681190f5e7fc6d1242582"
+    },
     "Bryan": {
-        "password": "$2b$12$3jxlAv4GH1lTH3Qiq9hugO44LJbfIuwRJmM0.nraBMbII8l60GaUm",
-        "ignore": ["spammer123", "louduser"]
+        "ignore": [
+            "spammer123",
+            "louduser"
+        ],
+        "password": "$2b$12$3jxlAv4GH1lTH3Qiq9hugO44LJbfIuwRJmM0.nraBMbII8l60GaUm"
+    },
+    "bruh": {
+        "ignore": [],
+        "password": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
     },
     "louduser": {
-        "password": "$2b$12$I0eq7cpvZ5NAjdO1N8msOeP9O0Sn7lwvep.OAlLEvhKu.O3AECscy",
-        "ignore": ["Bryan"]
+        "ignore": [
+            "Bryan"
+        ],
+        "password": "$2b$12$I0eq7cpvZ5NAjdO1N8msOeP9O0Sn7lwvep.OAlLEvhKu.O3AECscy"
     },
     "spammer123": {
-        "password": "$2b$12$fRonn7IV3bOOiPZ5/Z1Zz.PkUbMabt49rI/jv8jB2VK/TymrJdwFa",
-        "ignore": []
+        "ignore": [],
+        "password": "$2b$12$fRonn7IV3bOOiPZ5/Z1Zz.PkUbMabt49rI/jv8jB2VK/TymrJdwFa"
     }
 }

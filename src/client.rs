@@ -15,7 +15,9 @@ fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
         match line {
             Ok(msg) => println!("{msg}"),
             Err(e) => {
-                eprintln!("Error reading line: {e}");
+                if e.kind() != io::ErrorKind::UnexpectedEof {
+                    eprintln!("Error reading line: {e}");
+                }
                 break;
             }
         }
@@ -45,13 +47,12 @@ fn main() -> std::io::Result<()> {
     for line in stdin.lock().lines() {
         let msg = line?.trim().to_string();
         
-        // Handles sending input to the server
-        let command: Command = parse_command(&msg);
-
-        match dispatch_command(command, &mut stream)? {
-            CommandResult::Exit => break,
-            CommandResult::Handled => continue,
-            CommandResult::NotACommand => {}
+        if msg.starts_with("/") {
+            let command: Command = parse_command(&msg);
+            match dispatch_command(command, &mut stream)? {
+                CommandResult::Handled => continue,
+                CommandResult::Stop => break
+            }
         }
 
         stream.write_all(msg.as_bytes())?;

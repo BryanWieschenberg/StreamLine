@@ -1,5 +1,5 @@
 pub fn get_help_message() -> &'static str {
-    r#"Available commands:
+r#"Available commands:
 /help      - Show this help menu
 /ping      - Check connection to the server
 /clear     - Clear the chat screen
