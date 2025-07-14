@@ -1,3 +1,7 @@
+use std::fs::File;
+use std::io::BufReader;
+use serde_json::Value;
+
 pub fn get_help_message() -> &'static str {
 r#"Available commands:
 /help      - Show this help menu
@@ -17,4 +21,24 @@ pub fn generate_hash(input: &str) -> String {
     let result = hasher.finalize();
 
     hex::encode(result)
+}
+
+pub fn is_unique_username(username: String) -> bool {
+    let file = match File::open("data/users.json") {
+        Ok(f) => f,
+        Err(_) => return true, // File doesn't exist yet, allow any usernames
+    };
+
+    // Read into a JSON object
+    let reader = BufReader::new(file);
+    let users: Value = match serde_json::from_reader(reader) {
+        Ok(v) => v,
+        Err(_) => return true, // Misformatted file, assume no users
+    };
+
+    // Check if it's an object and contains the username key
+    match users.as_object() {
+        Some(map) => !map.contains_key(&username),
+        None => true,
+    }
 }

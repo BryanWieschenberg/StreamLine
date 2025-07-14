@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub enum Command {
     Unknown,
     Help,
@@ -21,6 +22,7 @@ pub enum Command {
     // RoomImport(String),
 }
 
+#[allow(dead_code)]
 pub fn parse_command(input: &str) -> Command {
     let tokens: Vec<&str> = input.trim().split_whitespace().collect();
 

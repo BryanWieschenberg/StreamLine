@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::io::{BufReader, BufRead, Write};
-use std::sync::{Arc, Mutex};
 use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::sync::{Arc, Mutex};
 use std::thread;
+
 mod state;
 // use crate::state::{types::*, manager::*, default::*};
 
@@ -9,21 +11,17 @@ mod commands;
 // use crate::commands::parser::Command;
 // use crate::commands::dispatcher::{dispatch_command, CommandResult};
 
-struct Client {
-    stream: TcpStream,
-    username: String
-}
-
-// Lockable vector of connected clients safely shared across threads
-type Clients = Arc<Mutex<Vec<Client>>>;
+use crate::state::types::{Client, Clients};
 
 // Handler for each client connection on a separate thread
 fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::io::Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
+    
+    // TODO: Right now, we assume the first line is /account register or /account login, but it isn't guarenteed
     let mut username = String::new();
     reader.read_line(&mut username)?;
-    let mut username = username.trim().to_string();
-    let mut username_clone = username.clone();
+    let username = username.trim().to_string();
+    
     println!("Client connected: {username} ({peer})");
 
     {
@@ -34,9 +32,10 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
                 return Err(std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned"));
             }
         };
-        locked.push(Client {
+        locked.insert(username.clone(), Client {
             stream: stream.try_clone()?,
-            username
+            username: username.clone(),
+            current_room: String::new(),
         });
     }
 
@@ -48,7 +47,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
                 if msg == "/exit" {
                     break;
                 }
-                println!("{username_clone} ({peer}): {msg}");
+                println!("{username} ({peer}): {msg}");
                 msg
             }
             Err(e) => {
@@ -65,17 +64,17 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
                 break;
             }
         };
-        locked.retain(|client| client.stream.peer_addr().is_ok());
+        locked.retain(|_name, client| client.stream.peer_addr().is_ok());
 
         // Broadcast the message to all other clients
-        for client in locked.iter_mut() {
+        for (_name, client) in locked.iter_mut() {
             if client.stream.peer_addr()? != peer {
-                let _ = writeln!(client.stream, "{username_clone}: {msg}");
+                let _ = writeln!(client.stream, "{username}: {msg}");
             }
         }
     }
 
-    println!("{username_clone} ({peer}) disconnected");
+    println!("{username} ({peer}) disconnected");
 
     Ok(())
 }
@@ -84,7 +83,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
 fn main() -> std::io::Result<()> {
     let port = 8080;
     let listener = TcpListener::bind(format!("127.0.0.1:{port}"))?;
-    let clients: Clients = Arc::new(Mutex::new(Vec::new()));
+    let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
     println!("Server listening on port {port}");
 
     // Main loop to accept incoming connections

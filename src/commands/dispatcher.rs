@@ -6,8 +6,9 @@ use serde_json::{Value, json, Serializer};
 use serde_json::ser::PrettyFormatter;
 use colored::*;
 use crate::commands::parser::Command;
-use crate::commands::utils::{get_help_message, generate_hash};
+use crate::commands::utils::{get_help_message, generate_hash, is_unique_username};
 
+#[allow(dead_code)]
 pub enum CommandResult {
     Handled,
     Stop,
@@ -16,6 +17,7 @@ pub enum CommandResult {
     // Error(String),
 }
 
+#[allow(dead_code)]
 pub fn dispatch_command(cmd: Command, stream: &mut TcpStream) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
@@ -42,8 +44,8 @@ pub fn dispatch_command(cmd: Command, stream: &mut TcpStream) -> io::Result<Comm
         }
 
         Command::AccountRegister {username, password, confirm} => {
-            if password == confirm {
-                println!("{}", format!("Registering user: {}", username).green());
+            if is_unique_username(username.clone()) && password == confirm {
+                println!("{}", format!("User Registered: {}", username).green());
 
                 let password_hash = generate_hash(&password);
             
@@ -68,6 +70,12 @@ pub fn dispatch_command(cmd: Command, stream: &mut TcpStream) -> io::Result<Comm
                 let formatter = PrettyFormatter::with_indent(b"    ");
                 let mut ser = Serializer::with_formatter(&mut writer, formatter);
                 users.serialize(&mut ser)?;
+
+                stream.write_all(username.as_bytes())?;
+                stream.write_all(b"\n")?;
+            }
+            else if password == confirm {
+                println!("{}", "Error: Name is already taken".yellow());
             }
             else {
                 println!("{}", "Error: Passwords don't match".yellow());
