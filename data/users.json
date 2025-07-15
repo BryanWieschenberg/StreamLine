@@ -10,6 +10,10 @@
         ],
         "password": "$2b$12$3jxlAv4GH1lTH3Qiq9hugO44LJbfIuwRJmM0.nraBMbII8l60GaUm"
     },
+    "ballsack": {
+        "ignore": [],
+        "password": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+    },
     "bruh": {
         "ignore": [],
         "password": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
@@ -17,6 +21,10 @@
     "bruhs": {
         "ignore": [],
         "password": "e3b98a4da31a127d4bde6e43033f66ba274cab0eb7eb1c70ec41402bf6273dd8"
+    },
+    "bruhssssss": {
+        "ignore": [],
+        "password": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
     },
     "louduser": {
         "ignore": [

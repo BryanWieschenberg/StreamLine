@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::net::TcpStream;
+use std::net::{TcpStream, SocketAddr};
 use std::sync::{Arc, Mutex};
 
 #[allow(dead_code)]
@@ -24,14 +24,21 @@ pub struct App {
 }
 
 #[allow(dead_code)]
-pub struct Client {
-    pub stream: TcpStream,
-    pub username: String,
-    pub current_room: String,
+pub enum ClientState {
+    Guest,
+    LoggedIn {username: String},
+    InRoom {username: String, room: String}
 }
 
 #[allow(dead_code)]
-pub type Clients = Arc<Mutex<HashMap<String, Client>>>;
+pub struct Client {
+    pub stream: TcpStream,
+    pub addr: SocketAddr,
+    pub state: ClientState
+}
+
+#[allow(dead_code)]
+pub type Clients = Arc<Mutex<HashMap<SocketAddr, Client>>>;
 
 #[allow(dead_code)]
 pub struct Room {

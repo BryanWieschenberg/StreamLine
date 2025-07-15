@@ -3,7 +3,6 @@ pub enum Command {
     Unknown,
     Help,
     Ping,
-    Clear,
     Quit,
 
     AccountRegister { username: String, password: String, confirm: String },
@@ -29,7 +28,6 @@ pub fn parse_command(input: &str) -> Command {
     match tokens.as_slice() {
         ["/help"] | ["/h"] => Command::Help,
         ["/ping"] => Command::Ping,
-        ["/clear"] | ["/c"] => Command::Clear,
         ["/quit"] | ["/exit"] | ["q"] | ["e"] => Command::Quit,
 
         ["/account", "register", username, password, confirm_password] => Command::AccountRegister {

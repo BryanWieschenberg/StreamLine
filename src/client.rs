@@ -1,12 +1,6 @@
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::thread;
-mod state;
-// use crate::state::{types::*, manager::*, default::*};
-
-mod commands;
-use crate::commands::parser::{Command, parse_command};
-use crate::commands::dispatcher::{dispatch_command, CommandResult};
 
 // Function to handle receiving messages from the server
 fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
@@ -46,13 +40,11 @@ fn main() -> std::io::Result<()> {
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
         let msg = line?.trim().to_string();
-        
-        if msg.starts_with("/") {
-            let command: Command = parse_command(&msg);
-            match dispatch_command(command, &mut stream)? {
-                CommandResult::Handled => continue,
-                CommandResult::Stop => break
-            }
+
+        if msg == "/clear" || msg == "/c" {
+            print!("\x1B[2J\x1B[H");
+            io::stdout().flush()?;
+            continue;
         }
 
         stream.write_all(msg.as_bytes())?;

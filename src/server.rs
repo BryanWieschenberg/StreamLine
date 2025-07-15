@@ -3,40 +3,36 @@ use std::io::{BufReader, BufRead, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use colored::Colorize;
+
+mod commands;
+use crate::commands::parser::{Command, parse_command};
+use crate::commands::dispatcher::{dispatch_command, CommandResult};
 
 mod state;
 // use crate::state::{types::*, manager::*, default::*};
 
-mod commands;
-// use crate::commands::parser::Command;
-// use crate::commands::dispatcher::{dispatch_command, CommandResult};
-
-use crate::state::types::{Client, Clients};
+use crate::state::types::{Clients, Client, ClientState};
 
 // Handler for each client connection on a separate thread
 fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::io::Result<()> {
-    let mut reader = BufReader::new(stream.try_clone()?);
-    
-    // TODO: Right now, we assume the first line is /account register or /account login, but it isn't guarenteed
-    let mut username = String::new();
-    reader.read_line(&mut username)?;
-    let username = username.trim().to_string();
-    
-    println!("Client connected: {username} ({peer})");
+    let reader = BufReader::new(stream.try_clone()?);
+
+    let client = Client {
+        stream: stream.try_clone()?,
+        addr: peer,
+        state: ClientState::Guest
+    };
 
     {
         let mut locked = match clients.lock() {
             Ok(guard) => guard,
             Err(poisoned) => {
                 eprintln!("Failed to lock clients: {poisoned}");
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned"));
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Failed to lock clients"));
             }
         };
-        locked.insert(username.clone(), Client {
-            stream: stream.try_clone()?,
-            username: username.clone(),
-            current_room: String::new(),
-        });
+        locked.insert(peer, client);
     }
 
     // Read messages from the client and broadcast them to all other clients
@@ -44,11 +40,57 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
         let msg = match line {
             Ok(msg) => {
                 let msg = msg.trim().to_string();
-                if msg == "/exit" {
-                    break;
+
+                if msg.starts_with("/") {
+                    let command: Command = parse_command(&msg);
+                    
+                    let mut locked = match clients.lock() {
+                        Ok(guard) => guard,
+                        Err(poisoned) => {
+                            eprintln!("Failed to lock clients: {poisoned}");
+                            return Err(std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned"));
+                        }
+                    };
+                    let client = match locked.get_mut(&peer) {
+                        Some(client) => client,
+                        None => {
+                            eprintln!("Client not found: {peer}");
+                            return Err(std::io::Error::new(std::io::ErrorKind::Other, "Client not found"));
+                        }
+                    };
+
+                    match dispatch_command(command, client)? {
+                        CommandResult::Handled => continue,
+                        CommandResult::Stop => break
+                    }
                 }
-                println!("{username} ({peer}): {msg}");
-                msg
+
+                let mut locked = match clients.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => {
+                        eprintln!("Failed to lock clients: {poisoned}");
+                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned"));
+                    }
+                };
+                let sender = match locked.get_mut(&peer) {
+                    Some(sender) => sender,
+                    None => {
+                        eprintln!("Sender not found: {peer}");
+                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Sender not found"));
+                    }
+                };
+
+                match &sender.state {
+                    ClientState::InRoom { .. } => msg,
+                    ClientState::LoggedIn { .. } => {
+                        let _ = writeln!(sender.stream, "{}", "You must join a room to chat".yellow());
+                        continue;
+                    }
+                    ClientState::Guest => {
+                        let _ = writeln!(sender.stream, "{}", "You must log in to chat".yellow());
+                        continue;
+                    }
+                }
             }
             Err(e) => {
                 eprintln!("Error reading line from {peer}: {e}");
@@ -56,25 +98,54 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
             }
         };
 
-        // Remove any clients that have disconnected before broadcasting
-        let mut locked = match clients.lock() {
+        let locked = match clients.lock() {
             Ok(guard) => guard,
             Err(poisoned) => {
                 eprintln!("Failed to lock clients: {poisoned}");
-                break;
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned"));
             }
         };
-        locked.retain(|_name, client| client.stream.peer_addr().is_ok());
+        let sender = match locked.get(&peer) {
+            Some(sender) => sender,
+            None => {
+                eprintln!("Sender not found: {peer}");
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, "Sender not found"));
+            }
+        };
 
-        // Broadcast the message to all other clients
-        for (_name, client) in locked.iter_mut() {
-            if client.stream.peer_addr()? != peer {
-                let _ = writeln!(client.stream, "{username}: {msg}");
+        if let ClientState::InRoom { username, room } = &sender.state {
+            let mut locked = match clients.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => {
+                    eprintln!("Failed to lock clients: {poisoned}");
+                    return Err(std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned"));
+                }
+            };
+            for (addr, client) in locked.iter_mut() {
+                if let ClientState::InRoom { room: r2, .. } = &client.state {
+                    if r2 == room && addr != &peer {
+                        let _ = writeln!(client.stream, "{username}: {msg}");
+                    }
+                }
             }
         }
     }
 
-    println!("{username} ({peer}) disconnected");
+    // Disconnection cleanup
+    let mut locked = match clients.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!("Failed to lock clients: {poisoned}");
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned"));
+        }
+    };
+    if let Some(client) = locked.remove(&peer) {
+        match client.state {
+            ClientState::Guest => println!("Guest ({peer}) disconnected"),
+            ClientState::LoggedIn { username } => println!("{username} ({peer}) disconnected"),
+            ClientState::InRoom { username, .. } => println!("{username} ({peer}) disconnected"),
+        }
+    }
 
     Ok(())
 }

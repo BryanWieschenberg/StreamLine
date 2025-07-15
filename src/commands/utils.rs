@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::BufReader;
 use serde_json::Value;
+use sha2::{Sha256, Digest};
 
 pub fn get_help_message() -> &'static str {
 r#"Available commands:
@@ -9,13 +10,10 @@ r#"Available commands:
 /clear     - Clear the chat screen
 /quit      - Exit the application
 /room      - List or join chat rooms
-/account   - Manage your account
-"#
+/account   - Manage your account"#
 }
 
 pub fn generate_hash(input: &str) -> String {
-    use sha2::{Sha256, Digest};
-
     let mut hasher = Sha256::new();
     hasher.update(input);
     let result = hasher.finalize();

@@ -1,12 +1,14 @@
 use std::io::{self, BufReader, Write};
-use std::net::TcpStream;
 use std::fs::{File, OpenOptions};
 use serde::Serialize;
 use serde_json::{Value, json, Serializer};
 use serde_json::ser::PrettyFormatter;
 use colored::*;
+
 use crate::commands::parser::Command;
 use crate::commands::utils::{get_help_message, generate_hash, is_unique_username};
+
+use crate::state::types::{Client, ClientState};
 
 #[allow(dead_code)]
 pub enum CommandResult {
@@ -18,35 +20,33 @@ pub enum CommandResult {
 }
 
 #[allow(dead_code)]
-pub fn dispatch_command(cmd: Command, stream: &mut TcpStream) -> io::Result<CommandResult> {
+pub fn dispatch_command(cmd: Command, client: &mut Client) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
-            print!("{}{}", get_help_message().green(), "\x1b[0m");
+            writeln!(client.stream, "{}{}", get_help_message().green(), "\x1b[0m")?;
             io::stdout().flush()?;
             Ok(CommandResult::Handled)
         }
 
         Command::Ping => {
-            println!("{}", "Pong!".green());
-            Ok(CommandResult::Handled)
-        }
-
-        Command::Clear => {
-            print!("\x1B[2J\x1B[H");
-            io::stdout().flush()?;
+            writeln!(client.stream, "{}", "Pong!".green())?;
             Ok(CommandResult::Handled)
         }
 
         Command::Quit => {
-            println!("{}", "Exiting...".green());
-            stream.shutdown(std::net::Shutdown::Both)?;
+            writeln!(client.stream, "{}", "Exiting...".green())?;
+            client.stream.shutdown(std::net::Shutdown::Both)?;
             Ok(CommandResult::Stop)
         }
 
         Command::AccountRegister {username, password, confirm} => {
-            if is_unique_username(username.clone()) && password == confirm {
-                println!("{}", format!("User Registered: {}", username).green());
-
+            if !is_unique_username(username.clone()) {
+                writeln!(client.stream, "{}", "Error: Name is already taken".yellow())?;
+            }
+            else if password != confirm {
+                writeln!(client.stream, "{}", "Error: Passwords don't match".yellow())?;
+            }
+            else {
                 let password_hash = generate_hash(&password);
             
                 let file = File::open("data/users.json")?;
@@ -71,14 +71,9 @@ pub fn dispatch_command(cmd: Command, stream: &mut TcpStream) -> io::Result<Comm
                 let mut ser = Serializer::with_formatter(&mut writer, formatter);
                 users.serialize(&mut ser)?;
 
-                stream.write_all(username.as_bytes())?;
-                stream.write_all(b"\n")?;
-            }
-            else if password == confirm {
-                println!("{}", "Error: Name is already taken".yellow());
-            }
-            else {
-                println!("{}", "Error: Passwords don't match".yellow());
+                client.state = ClientState::LoggedIn { username: username.clone() };
+
+                writeln!(client.stream, "{}", format!("User Registered: {}", username).green())?;
             }
 
             Ok(CommandResult::Handled)
@@ -156,7 +151,7 @@ pub fn dispatch_command(cmd: Command, stream: &mut TcpStream) -> io::Result<Comm
         // // }
 
         Command::Unknown => {
-            println!("{}", "Invalid command, use /help to see command formats".red());
+            writeln!(client.stream, "{}", "Invalid command, use /help to see command formats".red())?;
             Ok(CommandResult::Handled)
         }
     }
