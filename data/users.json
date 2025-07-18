@@ -32,6 +32,10 @@
         ],
         "password": "$2b$12$I0eq7cpvZ5NAjdO1N8msOeP9O0Sn7lwvep.OAlLEvhKu.O3AECscy"
     },
+    "morty": {
+        "ignore": [],
+        "password": "348d77e943a990e64b08bd3bafc7c1b3fde497e92670f78cd8e9eb27529706f2"
+    },
     "spammer123": {
         "ignore": [],
         "password": "$2b$12$fRonn7IV3bOOiPZ5/Z1Zz.PkUbMabt49rI/jv8jB2VK/TymrJdwFa"

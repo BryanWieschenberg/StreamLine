@@ -6,9 +6,10 @@ pub enum Command {
     Quit,
 
     AccountRegister { username: String, password: String, confirm: String },
+    AccountLogin { username: String, password: String },
+    AccountLogout
     // AccountEditUsername(String),
     // AccountEditPassword { new: String, confirm: String },
-    // AccountLogin { username: String, password: String },
     // AccountExport(Option<String>),
     // AccountDelete,
     // AccountImport(String),
@@ -35,15 +36,20 @@ pub fn parse_command(input: &str) -> Command {
             password: password.to_string(),
             confirm: confirm_password.to_string()
         },
+
+        ["/account", "login", u, p] => Command::AccountLogin {
+            username: u.to_string(),
+            password: p.to_string(),
+        },
+
+        ["/account", "logout"] => Command::AccountLogout {},
+
         // ["/account", "edit", "username", new] => Command::AccountEditUsername(new.to_string()),
         // ["/account", "edit", "password", new, confirm] => Command::AccountEditPassword {
         //     new: new.to_string(),
         //     confirm: confirm.to_string(),
         // },
-        // ["/account", "login", u, p] => Command::AccountLogin {
-        //     username: u.to_string(),
-        //     password: p.to_string(),
-        // },
+        
         // ["/account", "export"] => Command::AccountExport(None),
         // ["/account", "export", filename] => Command::AccountExport(Some(filename.to_string())),
         // ["/account", "delete"] => Command::AccountDelete,

@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::net::{TcpStream, SocketAddr};
 use std::sync::{Arc, Mutex};
+use once_cell::sync::Lazy;
 
 #[allow(dead_code)]
 pub enum InputMode {
@@ -38,7 +39,7 @@ pub struct Client {
 }
 
 #[allow(dead_code)]
-pub type Clients = Arc<Mutex<HashMap<SocketAddr, Client>>>;
+pub type Clients = Arc<Mutex<HashMap<SocketAddr, Arc<Mutex<Client>>>>>;
 
 #[allow(dead_code)]
 pub struct Room {
@@ -50,5 +51,8 @@ pub struct Room {
     pub roles: HashMap<String, String>
 }
 
-#[allow(dead_code)]
 pub type Rooms = Arc<Mutex<HashMap<String, Room>>>;
+
+// User file access lock
+pub static USERS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+pub static ROOMS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));

@@ -1,3 +1,3 @@
 pub mod parser;
 pub mod dispatcher;
-pub mod utils;
+pub mod command_utils;
