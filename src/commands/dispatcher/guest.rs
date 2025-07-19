@@ -33,67 +33,62 @@ pub fn handle_guest_command(cmd: Command, client: &mut Client) -> io::Result<Com
         Command::AccountRegister {username, password, confirm} => {
             if password != confirm {
                 writeln!(client.stream, "{}", "Error: Passwords don't match".yellow())?;
+                return Ok(CommandResult::Handled)
             }
-            else {
-                let file = File::open("data/users.json")?;
-                let reader = BufReader::new(file);
-                let mut users: Value = serde_json::from_reader(reader)?;
 
-                {
-                    let _lock = lock_users()?;
-                            
-                    if users.get(&username).is_some() {
-                        writeln!(client.stream, "{}", "Error: Name is already taken".yellow())?;
-                        return Ok(CommandResult::Handled);
-                    }
+            let _lock = lock_users()?;
 
-                    let password_hash = generate_hash(&password);
-    
-                    users[&username] = json!({
-                        "password": password_hash,
-                        "ignore": []
-                    });
-                }   
-
-                let file = OpenOptions::new()
-                    .write(true)
-                    .truncate(true)
-                    .open("data/users.json")?;
-
-                let mut writer = std::io::BufWriter::new(file);
-                let formatter = PrettyFormatter::with_indent(b"    ");
-                let mut ser = Serializer::with_formatter(&mut writer, formatter);
-                users.serialize(&mut ser)?;
-
-                client.state = ClientState::LoggedIn { username: username.clone() };
-
-                writeln!(client.stream, "{}", format!("User Registered: {}", username).green())?;
+            let file = File::open("data/users.json")?;
+            let reader = BufReader::new(file);
+            let mut users: Value = serde_json::from_reader(reader)?;
+            
+            if users.get(&username).is_some() {
+                writeln!(client.stream, "{}", "Error: Name is already taken".yellow())?;
+                return Ok(CommandResult::Handled);
             }
+
+            let password_hash = generate_hash(&password);
+
+            users[&username] = json!({
+                "password": password_hash,
+                "ignore": []
+            });
+
+            let file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open("data/users.json")?;
+
+            let mut writer = std::io::BufWriter::new(file);
+            let formatter = PrettyFormatter::with_indent(b"    ");
+            let mut ser = Serializer::with_formatter(&mut writer, formatter);
+            users.serialize(&mut ser)?;
+
+            client.state = ClientState::LoggedIn { username: username.clone() };
+            writeln!(client.stream, "{}", format!("User Registered: {}", username).green())?;
 
             Ok(CommandResult::Handled)
         }
 
         Command::AccountLogin {username, password} => {
+            let _lock = lock_users()?;
+
             let file = File::open("data/users.json")?;
             let reader = BufReader::new(file);
             let users: Value = serde_json::from_reader(reader)?;
 
-            {
-                let _lock = lock_users()?;
-
-                match users.get(&username) {
-                    Some(user_obj) => {
-                        let stored_hash = user_obj.get("password").and_then(|v| v.as_str()).unwrap_or("");
-                        if generate_hash(&password) == stored_hash {
-                            client.state = ClientState::LoggedIn { username: username.clone() };
-                            writeln!(client.stream, "{}", format!("Logged in as: {}", username).green())?;
-                        } else {
-                            writeln!(client.stream, "{}", "Error: Incorrect password".yellow())?;
-                        }
+            match users.get(&username) {
+                Some(user_obj) => {
+                    let stored_hash = user_obj.get("password").and_then(|v| v.as_str()).unwrap_or("");
+                    if generate_hash(&password) == stored_hash {
+                        client.state = ClientState::LoggedIn { username: username.clone() };
+                        writeln!(client.stream, "{}", format!("Logged in as: {}", username).green())?;
+                    } else {
+                        writeln!(client.stream, "{}", "Error: Incorrect password".yellow())?;
                     }
-                    None => {
-                        writeln!(client.stream, "{}", "Error: Username not found".yellow())?;
-                    }
+                }
+                None => {
+                    writeln!(client.stream, "{}", "Error: Username not found".yellow())?;
                 }
             }
 

@@ -15,6 +15,35 @@ use crate::state::types::{Clients, Client, ClientState};
 mod utils;
 use crate::utils::{lock_clients, lock_client};
 
+fn broadcast_message(msg: &str, sender_arc: &Arc<Mutex<Client>>, clients: &Clients) -> std::io::Result<()> {
+    let locked_clients = lock_clients(clients)?;
+    
+    let sender = lock_client(sender_arc)?;
+    let (sender_username, sender_room) = match &sender.state {
+        ClientState::InRoom { username, room } => (username.clone(), room.clone()),
+        _ => return Ok(()), // Sender not in room, don't broadcast
+    };
+    let sender_addr = sender.addr;
+    drop(sender);
+    
+    // Iterate thru all clients
+    for (addr, client_arc) in locked_clients.iter() {
+        if addr == &sender_addr {
+            continue; // Skip sender
+        }
+        
+        if let Ok(mut client) = lock_client(client_arc) {
+            if let ClientState::InRoom { room, .. } = &client.state {
+                if room == &sender_room {
+                    writeln!(client.stream, "{sender_username}: {msg}")?;
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
 // Handler for each client connection on a separate thread
 fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::io::Result<()> {
     let reader = BufReader::new(stream.try_clone()?);
@@ -35,7 +64,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
 
     // Read messages from the client and broadcast them to all other clients
     for line in reader.lines() {
-        let msg = match line {
+        match line {
             Ok(msg) => {
                 let msg = msg.trim().to_string();
 
@@ -54,7 +83,13 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
                 let mut sender = lock_client(&client_arc)?;
 
                 match &sender.state {
-                    ClientState::InRoom { .. } => msg,
+                    ClientState::InRoom { .. } => {
+                        drop(sender);
+                        if let Err(e) = broadcast_message(&msg, &client_arc, &clients) {
+                            eprintln!("Error broadcasting message from {peer}: {e}");
+                            break;
+                        }
+                    }
                     ClientState::LoggedIn { .. } => {
                         writeln!(sender.stream, "{}", "You must join a room to chat".yellow())?;
                         continue;
@@ -70,31 +105,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
                 break;
             }
         };
-
-        let (username, room) = {
-            let sender = lock_client(&client_arc)?;
-
-            match &sender.state {
-                ClientState::InRoom { username, room } => (username.clone(), room.clone()),
-                _ => continue,
-            }
-        };
-
-        let locked = lock_clients(&clients)?;
-
-        for (addr, other_arc) in locked.iter() {
-            if addr == &peer {
-                continue;
-            }
-
-            let mut client = lock_client(&other_arc)?;
-
-            if let ClientState::InRoom { room: room_recv, .. } = &client.state {
-                if room_recv == &room {
-                    writeln!(client.stream, "{username}: {msg}")?;
-                }
-            }
-        }
     }
 
     // Disconnection cleanup

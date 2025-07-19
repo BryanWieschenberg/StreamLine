@@ -1,51 +1,10 @@
 {
-    "Balls": {
-        "ignore": [],
-        "password": "3ae8cbcfc3b2676d67320cd6f0061a45de3b87e3b5d681190f5e7fc6d1242582"
-    },
-    "Bryan": {
-        "ignore": [
-            "spammer123",
-            "louduser"
-        ],
-        "password": "$2b$12$3jxlAv4GH1lTH3Qiq9hugO44LJbfIuwRJmM0.nraBMbII8l60GaUm"
-    },
-    "TheGuy12": {
-        "ignore": [],
-        "password": "3ae8cbcfc3b2676d67320cd6f0061a45de3b87e3b5d681190f5e7fc6d1242582"
-    },
-    "ballsack": {
+    "balls": {
         "ignore": [],
         "password": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
     },
-    "bruh": {
+    "bryan": {
         "ignore": [],
         "password": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
-    },
-    "bruhs": {
-        "ignore": [],
-        "password": "e3b98a4da31a127d4bde6e43033f66ba274cab0eb7eb1c70ec41402bf6273dd8"
-    },
-    "bruhssssss": {
-        "ignore": [],
-        "password": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
-    },
-    "louduser": {
-        "ignore": [
-            "Bryan"
-        ],
-        "password": "$2b$12$I0eq7cpvZ5NAjdO1N8msOeP9O0Sn7lwvep.OAlLEvhKu.O3AECscy"
-    },
-    "morty": {
-        "ignore": [],
-        "password": "348d77e943a990e64b08bd3bafc7c1b3fde497e92670f78cd8e9eb27529706f2"
-    },
-    "pee": {
-        "ignore": [],
-        "password": "3ae8cbcfc3b2676d67320cd6f0061a45de3b87e3b5d681190f5e7fc6d1242582"
-    },
-    "spammer123": {
-        "ignore": [],
-        "password": "$2b$12$fRonn7IV3bOOiPZ5/Z1Zz.PkUbMabt49rI/jv8jB2VK/TymrJdwFa"
     }
 }
