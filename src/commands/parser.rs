@@ -1,25 +1,18 @@
+use colored::*;
+
 #[allow(dead_code)]
 pub enum Command {
-    Unknown,
     Help,
     Ping,
     Quit,
 
     AccountRegister { username: String, password: String, confirm: String },
     AccountLogin { username: String, password: String },
-    AccountLogout
-    // AccountEditUsername(String),
-    // AccountEditPassword { new: String, confirm: String },
-    // AccountExport(Option<String>),
-    // AccountDelete,
-    // AccountImport(String),
+    AccountLogout,
+    Account,
 
-    // Room-related
-    // RoomList,
-    // RoomJoin(String),
-    // RoomCreate(String),
-    // RoomDelete(String),
-    // RoomImport(String),
+    InvalidSyntax { err_msg: String },
+    Unavailable
 }
 
 #[allow(dead_code)]
@@ -37,12 +30,24 @@ pub fn parse_command(input: &str) -> Command {
             confirm: confirm_password.to_string()
         },
 
+        ["/account", "register", ..] => {
+            let err_msg = format!("{}", "Usage: /account register <username> <password> <password confirm>".yellow());
+            Command::InvalidSyntax { err_msg }
+        }
+
         ["/account", "login", u, p] => Command::AccountLogin {
             username: u.to_string(),
             password: p.to_string(),
         },
 
+        ["/account", "login", ..] => {
+            let err_msg = format!("{}", "Usage: /account login <username> <password>".yellow());
+            Command::InvalidSyntax { err_msg }
+        }
+
         ["/account", "logout"] => Command::AccountLogout {},
+
+        ["/account"] => Command::Account,
 
         // ["/account", "edit", "username", new] => Command::AccountEditUsername(new.to_string()),
         // ["/account", "edit", "password", new, confirm] => Command::AccountEditPassword {
@@ -62,6 +67,6 @@ pub fn parse_command(input: &str) -> Command {
         // ["/room", "delete", room] => Command::RoomDelete(room.to_string()),
         // ["/room", "import", file] => Command::RoomImport(file.to_string()),
 
-        _ => Command::Unknown
+        _ => Command::Unavailable
     }
 }

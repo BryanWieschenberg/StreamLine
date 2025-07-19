@@ -7,22 +7,11 @@ use colored::*;
 
 use crate::commands::parser::Command;
 use crate::commands::command_utils::{get_help_message, generate_hash};
-
-use crate::state::types::{Client, ClientState, USERS_LOCK, ROOMS_LOCK};
-
+use crate::state::types::{Client, ClientState};
 use crate::utils::{lock_users};
+use super::CommandResult;
 
-#[allow(dead_code)]
-pub enum CommandResult {
-    Handled,
-    Stop,
-    // PermissionDenied,
-    // InvalidArgs,
-    // Error(String),
-}
-
-#[allow(dead_code)]
-pub fn dispatch_command(cmd: Command, client: &mut Client) -> io::Result<CommandResult> {
+pub fn handle_guest_command(cmd: Command, client: &mut Client) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
             writeln!(client.stream, "{}{}", get_help_message().green(), "\x1b[0m")?;
@@ -111,95 +100,23 @@ pub fn dispatch_command(cmd: Command, client: &mut Client) -> io::Result<Command
             Ok(CommandResult::Handled)
         }
 
-        Command::AccountLogout {} => {
-            match &client.state {
-                ClientState::Guest => {
-                    writeln!(client.stream, "{}", "You're not logged in".yellow())?;
-                    false
-                }
-                ClientState::LoggedIn { username } => {
-                    let name = username.clone();
-                    client.state = ClientState::Guest;
-                    writeln!(client.stream, "{}", format!("Logged out: {}", name).green())?;
-                    true
-                }
-                ClientState::InRoom { .. } => {
-                    writeln!(client.stream, "{}", "You must leave the room before logging out".yellow())?;
-                    false
-                }
-            };
-
+        Command::AccountLogout => {
+            writeln!(client.stream, "{}", "You are not currently logged in".yellow())?;
             Ok(CommandResult::Handled)
         }
 
-        // Command::AccountEditUsername(new_username) => {
-        //     writeln!(stream, "Editing username to: {}", new_username)?;
-        //     // TODO: update username
-        //     Ok(CommandResult::Handled)
-        // }
+        Command::Account => {
+            writeln!(client.stream, "{}", "Currently a guest, please register or log into an account to join a room".green())?;
+            Ok(CommandResult::Handled)
+        }
 
-        // Command::AccountEditPassword { new, confirm } => {
-        //     writeln!(stream, "Editing password...")?;
-        //     // TODO: verify & update password
-        //     Ok(CommandResult::Handled)
-        // }
+        Command::InvalidSyntax {err_msg } => {
+            writeln!(client.stream, "{}", err_msg)?;
+            Ok(CommandResult::Handled)
+        }
 
-
-        // Command::AccountExport(Some(filename)) => {
-        //     writeln!(stream, "Exporting account to: {}", filename)?;
-        //     // TODO: write account data to file
-        //     Ok(CommandResult::Handled)
-        // }
-
-        // Command::AccountExport(None) => {
-        //     writeln!(stream, "Exporting account to default timestamped file...")?;
-        //     Ok(CommandResult::Handled)
-        // }
-
-        // Command::AccountDelete => {
-        //     writeln!(stream, "Deleting account...")?;
-        //     // TODO: confirm y/n, then remove
-        //     Ok(CommandResult::Handled)
-        // }
-
-        // Command::AccountImport(filename) => {
-        //     writeln!(stream, "Importing account from: {}", filename)?;
-        //     // TODO: load account from JSON
-        //     Ok(CommandResult::Handled)
-        // }
-
-        // // Command::RoomList => {
-        // //     writeln!(stream, "Showing available rooms...")?;
-        // //     // TODO: send actual room list from shared state
-        // //     Ok(CommandResult::Handled)
-        // // }
-
-        // // Command::RoomJoin(name) => {
-        // //     writeln!(stream, "Joining room: {}", name)?;
-        // //     // TODO: logic to change client's current room
-        // //     Ok(CommandResult::Handled)
-        // // }
-
-        // // Command::RoomCreate(name) => {
-        // //     writeln!(stream, "Creating room: {}", name)?;
-        // //     // TODO: create room, assign creator
-        // //     Ok(CommandResult::Handled)
-        // // }
-
-        // // Command::RoomDelete(name) => {
-        // //     writeln!(stream, "Deleting room: {}", name)?;
-        // //     // TODO: delete room logic
-        // //     Ok(CommandResult::Handled)
-        // // }
-
-        // // Command::RoomImport(filename) => {
-        // //     writeln!(stream, "Importing room from: {}", filename)?;
-        // //     // TODO: read file, create room
-        // //     Ok(CommandResult::Handled)
-        // // }
-
-        Command::Unknown => {
-            writeln!(client.stream, "{}", "Invalid command, use /help to see command formats".red())?;
+        Command::Unavailable => {
+            writeln!(client.stream, "{}", "Command unavailable, use /help to see available commands".red())?;
             Ok(CommandResult::Handled)
         }
     }

@@ -25,6 +25,7 @@ pub struct App {
 }
 
 #[allow(dead_code)]
+#[derive(Clone)]
 pub enum ClientState {
     Guest,
     LoggedIn {username: String},
@@ -51,8 +52,11 @@ pub struct Room {
     pub roles: HashMap<String, String>
 }
 
+#[allow(dead_code)]
 pub type Rooms = Arc<Mutex<HashMap<String, Room>>>;
 
 // User file access lock
 pub static USERS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+#[allow(dead_code)]
 pub static ROOMS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));

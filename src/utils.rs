@@ -26,6 +26,7 @@ pub fn lock_users<'a>() -> io::Result<MutexGuard<'a, ()>> {
     })
 }
 
+#[allow(dead_code)]
 pub fn lock_rooms<'a>() -> io::Result<MutexGuard<'a, ()>> {
     ROOMS_LOCK.lock().map_err(|e| {
         eprintln!("Failed to lock rooms: {e}");
