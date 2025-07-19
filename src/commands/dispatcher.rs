@@ -10,6 +10,8 @@ use crate::commands::command_utils::{get_help_message, generate_hash};
 
 use crate::state::types::{Client, ClientState, USERS_LOCK, ROOMS_LOCK};
 
+use crate::utils::{lock_users};
+
 #[allow(dead_code)]
 pub enum CommandResult {
     Handled,
@@ -44,76 +46,65 @@ pub fn dispatch_command(cmd: Command, client: &mut Client) -> io::Result<Command
                 writeln!(client.stream, "{}", "Error: Passwords don't match".yellow())?;
             }
             else {
-                let _lock = match USERS_LOCK.lock() {
-                    Ok(lock) => lock,
-                    Err(_) => {
-                        writeln!(client.stream, "{}", "Error: Could not acquire user lock".yellow())?;
-                        return Ok(CommandResult::Handled);
-                    }
-                };
-            
                 let file = File::open("data/users.json")?;
                 let reader = BufReader::new(file);
                 let mut users: Value = serde_json::from_reader(reader)?;
 
-                if users.get(&username).is_some() {
-                    writeln!(client.stream, "{}", "Error: Name is already taken".yellow())?;
-                }
-                else {
+                {
+                    let _lock = lock_users()?;
+                            
+                    if users.get(&username).is_some() {
+                        writeln!(client.stream, "{}", "Error: Name is already taken".yellow())?;
+                        return Ok(CommandResult::Handled);
+                    }
+
                     let password_hash = generate_hash(&password);
     
-                    // Add a new user
                     users[&username] = json!({
                         "password": password_hash,
                         "ignore": []
                     });
+                }   
 
-                    // Write back to file
-                    let file = OpenOptions::new()
-                        .write(true)
-                        .truncate(true)
-                        .open("data/users.json")?;
+                let file = OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open("data/users.json")?;
 
-                    // Append the new user to users.json
-                    let mut writer = std::io::BufWriter::new(file);
-                    let formatter = PrettyFormatter::with_indent(b"    ");
-                    let mut ser = Serializer::with_formatter(&mut writer, formatter);
-                    users.serialize(&mut ser)?;
+                let mut writer = std::io::BufWriter::new(file);
+                let formatter = PrettyFormatter::with_indent(b"    ");
+                let mut ser = Serializer::with_formatter(&mut writer, formatter);
+                users.serialize(&mut ser)?;
 
-                    client.state = ClientState::LoggedIn { username: username.clone() };
+                client.state = ClientState::LoggedIn { username: username.clone() };
 
-                    writeln!(client.stream, "{}", format!("User Registered: {}", username).green())?;
-                }
+                writeln!(client.stream, "{}", format!("User Registered: {}", username).green())?;
             }
 
             Ok(CommandResult::Handled)
         }
 
         Command::AccountLogin {username, password} => {
-            let _lock = match USERS_LOCK.lock() {
-                Ok(lock) => lock,
-                Err(_) => {
-                    writeln!(client.stream, "{}", "Error: Could not acquire user lock".yellow())?;
-                    return Ok(CommandResult::Handled);
-                }
-            };
-
             let file = File::open("data/users.json")?;
             let reader = BufReader::new(file);
             let users: Value = serde_json::from_reader(reader)?;
 
-            match users.get(&username) {
-                Some(user_obj) => {
-                    let stored_hash = user_obj.get("password").and_then(|v| v.as_str()).unwrap_or("");
-                    if generate_hash(&password) == stored_hash {
-                        client.state = ClientState::LoggedIn { username: username.clone() };
-                        writeln!(client.stream, "{}", format!("Logged in as: {}", username).green())?;
-                    } else {
-                        writeln!(client.stream, "{}", "Error: Incorrect password".yellow())?;
+            {
+                let _lock = lock_users()?;
+
+                match users.get(&username) {
+                    Some(user_obj) => {
+                        let stored_hash = user_obj.get("password").and_then(|v| v.as_str()).unwrap_or("");
+                        if generate_hash(&password) == stored_hash {
+                            client.state = ClientState::LoggedIn { username: username.clone() };
+                            writeln!(client.stream, "{}", format!("Logged in as: {}", username).green())?;
+                        } else {
+                            writeln!(client.stream, "{}", "Error: Incorrect password".yellow())?;
+                        }
                     }
-                }
-                None => {
-                    writeln!(client.stream, "{}", "Error: Username not found".yellow())?;
+                    None => {
+                        writeln!(client.stream, "{}", "Error: Username not found".yellow())?;
+                    }
                 }
             }
 
@@ -121,8 +112,23 @@ pub fn dispatch_command(cmd: Command, client: &mut Client) -> io::Result<Command
         }
 
         Command::AccountLogout {} => {
-            writeln!(client.stream, "Logged out")?;
-            // TODO: validate password, set session
+            match &client.state {
+                ClientState::Guest => {
+                    writeln!(client.stream, "{}", "You're not logged in".yellow())?;
+                    false
+                }
+                ClientState::LoggedIn { username } => {
+                    let name = username.clone();
+                    client.state = ClientState::Guest;
+                    writeln!(client.stream, "{}", format!("Logged out: {}", name).green())?;
+                    true
+                }
+                ClientState::InRoom { .. } => {
+                    writeln!(client.stream, "{}", "You must leave the room before logging out".yellow())?;
+                    false
+                }
+            };
+
             Ok(CommandResult::Handled)
         }
 

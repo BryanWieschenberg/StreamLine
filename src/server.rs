@@ -31,11 +31,15 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
         locked.insert(peer, Arc::clone(&client_arc));
     }
 
+    println!("Guest ({peer}) connected");
+
     // Read messages from the client and broadcast them to all other clients
     for line in reader.lines() {
         let msg = match line {
             Ok(msg) => {
                 let msg = msg.trim().to_string();
+
+                if msg.is_empty() { continue };
 
                 if msg.starts_with("/") {
                     let command: Command = parse_command(&msg);

@@ -1,6 +1,7 @@
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::thread;
+use colored::Colorize;
 
 // Function to handle receiving messages from the server
 fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
@@ -8,16 +9,15 @@ fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
     for line in reader.lines() {
         match line {
             Ok(msg) => println!("{msg}"),
+            Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => break,
             Err(e) => {
-                if e.kind() != io::ErrorKind::UnexpectedEof {
-                    eprintln!("Error reading line: {e}");
-                }
-                break;
+                eprintln!("Error reading line: {e}");
+                continue;
             }
         }
     }
 
-    Ok(())
+    std::process::exit(0);
 }
 
 // Main function to connect to the server and read/receive user input
@@ -26,8 +26,16 @@ fn main() -> std::io::Result<()> {
     let mut stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
     let stream_clone = stream.try_clone()?;
 
-    // Prompt user for username and send it to the server
-    println!("Enter your username:");
+    println!("{}", "
+        Welcome to StreamLine!\n
+        Make an account with /account register <username> <password> <confirm password> or
+        login with /account login <username> <password> and
+        make a room with /room create <room name>,
+        join a room with /room join <room name>,
+        or see a list of rooms with /room\n
+        For a list of all available commands, type /help
+    ".bright_blue());
+    
     let mut username = String::new();
     io::stdin().read_line(&mut username)?;
     stream.write_all(username.trim().as_bytes())?;
@@ -36,6 +44,7 @@ fn main() -> std::io::Result<()> {
     // Spawn a thread to handle receiving messages from the server
     thread::spawn(move || handle_recv(stream_clone));
 
+    //TODO: /exit wont leave, server must send signal here so client program will terminate
     // Handles sending messages to the server
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
