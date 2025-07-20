@@ -1,7 +1,7 @@
-use std::io::{self, BufReader, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::fs::{File, OpenOptions};
 use serde::Serialize;
-use serde_json::{Value, Serializer};
+use serde_json::{json, Serializer, Value};
 use serde_json::ser::PrettyFormatter;
 use std::sync::{Arc, Mutex};
 use colored::*;
@@ -23,7 +23,7 @@ pub fn handle_loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _client
 
         Command::Ping => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Pong!".green())?;
+            writeln!(client.stream, "{}", "PONG.".green())?;
             Ok(CommandResult::Handled)
         }
 
@@ -136,6 +136,183 @@ pub fn handle_loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _client
             users.serialize(&mut ser)?;
 
             writeln!(client.stream, "{}", "Password updated successfully".green())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountImport { filename } => {
+            let safe_filename = if !filename.ends_with(".json") {
+                format!("{}.json", filename)
+            }
+            else {
+                filename
+            };
+
+            let import_path = format!("data/logs/users/{}", safe_filename);
+            let import_file = match File::open(&import_path) {
+                Ok(file) => file,
+                Err(_) => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Error: Could not open '{}'", import_path).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let import_reader = BufReader::new(import_file);
+            let import_user: Value = match serde_json::from_reader(import_reader) {
+                Ok(data) => data,
+                Err(_) => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Invalid JSON format in import file".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let (username, user_data) = match import_user.as_object().and_then(|obj| obj.iter().next()) {
+                Some((u, data)) => (u.clone(), data.clone()),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Import file is empty or malformed".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let _lock = lock_users()?;
+
+            let file = File::open("data/users.json")?;
+            let reader = BufReader::new(file);
+            let mut users: Value = serde_json::from_reader(reader)?;
+
+            if users.get(&username).is_some() {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("Error: User '{}' already exists", username).yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            users[&username] = user_data;
+
+            let file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open("data/users.json")?;
+
+            let mut writer = std::io::BufWriter::new(file);
+            let formatter = PrettyFormatter::with_indent(b"    ");
+            let mut ser = Serializer::with_formatter(&mut writer, formatter);
+            users.serialize(&mut ser)?;
+
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", format!("Imported user: {}", username).green())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountExport { filename } => {
+            let _lock = lock_users()?;
+
+            let file = File::open("data/users.json")?;
+            let reader = BufReader::new(file);
+            let users: Value = serde_json::from_reader(reader)?;
+
+            let user_data = match users.get(&username) {
+                Some(data) => data.clone(),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Your account data could not be found".red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let final_filename = {
+                if filename.is_empty() {
+                    let timestamp = chrono::Local::now().format("%y%m%d%H%M%S").to_string();
+                    format!("{}_{}.json", username, timestamp)
+                } else if !filename.ends_with(".json") {
+                    format!("{}.json", filename)
+                }
+                else {
+                    filename
+                }
+            };
+
+            let export_path = format!("data/logs/users/{}", final_filename);
+            let export_file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&export_path)?;
+
+            let mut writer = std::io::BufWriter::new(export_file);
+            let formatter = PrettyFormatter::with_indent(b"    ");
+            let mut ser = Serializer::with_formatter(&mut writer, formatter);
+
+            json!({ username: user_data }).serialize(&mut ser)?;
+
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", format!("Exported account data to: {}", final_filename).green())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountDelete { force } => {
+            if !force {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", "Are you sure you want to delete your account? (y/n): ".red())?;
+
+                let mut reader: BufReader<std::net::TcpStream> = BufReader::new(client.stream.try_clone()?);
+                loop {
+                    let mut line = String::new();
+                    let bytes_read = reader.read_line(&mut line)?;
+                    if bytes_read == 0 {
+                        writeln!(client.stream, "{}", "Connection closed".yellow())?;
+                        return Ok(CommandResult::Stop);
+                    }
+
+                    let input = line.trim().to_lowercase();
+                    match input.as_str() {
+                        "y" => break,
+                        "n" => {
+                            writeln!(client.stream, "{}", "Account deletion cancelled".yellow())?;
+                            return Ok(CommandResult::Handled);
+                        },
+                        _ => {
+                            writeln!(client.stream, "{}", "(y/n): ".red())?;
+                        }
+                    }
+                }
+            }
+
+            let _lock = lock_users()?;
+            let file = File::open("data/users.json")?;
+            let reader = BufReader::new(file);
+            let mut users: Value = serde_json::from_reader(reader)?;
+
+            if users.get(&username).is_none() {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", "Error: User not found in records".red())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            if let Some(obj) = users.as_object_mut() {
+                obj.remove(username);
+            }
+            else {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", "Error: Malformed users.json".red())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            let file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open("data/users.json")?;
+
+            let mut writer = std::io::BufWriter::new(file);
+            let formatter = PrettyFormatter::with_indent(b"    ");
+            let mut ser = Serializer::with_formatter(&mut writer, formatter);
+            users.serialize(&mut ser)?;
+
+            let mut client = lock_client(&client)?;
+            client.state = ClientState::Guest;
+            writeln!(client.stream, "{}", format!("Account {} deleted successfully, you are now a guest", username).green())?;
+
             Ok(CommandResult::Handled)
         }
 

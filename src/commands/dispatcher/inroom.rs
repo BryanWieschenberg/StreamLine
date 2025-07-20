@@ -19,7 +19,7 @@ pub fn handle_inroom_command(cmd: Command, client: Arc<Mutex<Client>>, _clients:
 
         Command::Ping => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Pong!".green())?;
+            writeln!(client.stream, "{}", "PONG.".green())?;
             Ok(CommandResult::Handled)
         }
 
@@ -32,31 +32,49 @@ pub fn handle_inroom_command(cmd: Command, client: Arc<Mutex<Client>>, _clients:
 
         Command::AccountRegister { .. } => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "You are already logged in".yellow())?;
+            writeln!(client.stream, "{}", "Already logged in".yellow())?;
             Ok(CommandResult::Handled)
         }
 
         Command::AccountLogin { .. } => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "You are already logged in".yellow())?;
+            writeln!(client.stream, "{}", "Already logged in".yellow())?;
             Ok(CommandResult::Handled)
         }
 
         Command::AccountLogout => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "You must be in the lobby to log out".yellow())?;
+            writeln!(client.stream, "{}", "Must be in the lobby to log out".yellow())?;
             Ok(CommandResult::Handled)
         }
 
         Command::AccountEditUsername { .. } => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "You must be in the lobby to edit your account".yellow())?;
+            writeln!(client.stream, "{}", "Must be in the lobby to edit your account".yellow())?;
             Ok(CommandResult::Handled)
         }
 
         Command::AccountEditPassword { .. } => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "You must be in the lobby to edit your account".yellow())?;
+            writeln!(client.stream, "{}", "Must be in the lobby to edit your account".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountImport { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must be in the lobby to import an account".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountExport { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must be in the lobby to export your account".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountDelete { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must be in the lobby to delete your account".green())?;
             Ok(CommandResult::Handled)
         }
 

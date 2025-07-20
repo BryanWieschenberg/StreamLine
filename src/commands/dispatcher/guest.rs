@@ -136,6 +136,84 @@ pub fn handle_guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &
             Ok(CommandResult::Handled)
         }
 
+        Command::AccountImport { filename } => {
+            let safe_filename = if !filename.ends_with(".json") {
+                format!("{}.json", filename)
+            }
+            else {
+                filename
+            };
+
+            let import_path = format!("data/logs/users/{}", safe_filename);
+            let import_file = match File::open(&import_path) {
+                Ok(file) => file,
+                Err(_) => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Error: Could not open '{}'", import_path).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let import_reader = BufReader::new(import_file);
+            let import_user: Value = match serde_json::from_reader(import_reader) {
+                Ok(data) => data,
+                Err(_) => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Invalid JSON format in import file".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let (username, user_data) = match import_user.as_object().and_then(|obj| obj.iter().next()) {
+                Some((u, data)) => (u.clone(), data.clone()),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Import file is empty or malformed".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let _lock = lock_users()?;
+
+            let file = File::open("data/users.json")?;
+            let reader = BufReader::new(file);
+            let mut users: Value = serde_json::from_reader(reader)?;
+
+            if users.get(&username).is_some() {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("Error: User '{}' already exists", username).yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            users[&username] = user_data;
+
+            let file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open("data/users.json")?;
+
+            let mut writer = std::io::BufWriter::new(file);
+            let formatter = PrettyFormatter::with_indent(b"    ");
+            let mut ser = Serializer::with_formatter(&mut writer, formatter);
+            users.serialize(&mut ser)?;
+
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", format!("Imported user: {}", username).green())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountExport { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Currently a guest, please register or log into an account to export account data".green())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountDelete { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Currently a guest, cannot delete an account".green())?;
+            Ok(CommandResult::Handled)
+        }
+
         Command::Account => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Currently a guest, please register or log into an account to join a room".green())?;

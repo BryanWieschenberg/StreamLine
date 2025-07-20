@@ -12,9 +12,9 @@ pub enum Command {
     AccountLogout,
     AccountEditUsername { username: String },
     AccountEditPassword { current_password: String, new_password: String },
-    // AccountImport { filename: String },
-    // AccountExport { filename: String },
-    // AccountDelete,
+    AccountImport { filename: String },
+    AccountExport { filename: String },
+    AccountDelete { force: bool },
 
     InvalidSyntax { err_msg: String },
     Unavailable
@@ -92,6 +92,55 @@ pub fn parse_command(input: &str) -> Command {
         ["/account", "e", ..] |
         ["/a", "e", ..] => {
             let err_msg = format!("{}", "Usage: /account edit username <new username> or /account edit password <current password> <new password>".yellow());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["/account", "import", filename] |
+        ["/a", "import", filename] => Command::AccountImport {
+            filename: filename.to_string()
+        },
+
+        ["/account", "import", ..] |
+        ["/a", "import", ..] => {
+            let err_msg = format!("{}", "Usage: /account import <filename>.json".yellow());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["/account", "export"] |
+        ["/a", "export"] => Command::AccountExport {
+            filename: "".to_string()
+        },
+
+        ["/account", "export", filename] |
+        ["/a", "export", filename] => Command::AccountExport {
+            filename: filename.to_string()
+        },
+
+        ["/account", "export", ..] |
+        ["/a", "export", ..] => {
+            let err_msg = format!("{}", "Usage: /account export or /account export <filename>.json".yellow());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["/account", "delete"] |
+        ["/a", "delete"] | 
+        ["/account", "d"] |
+        ["/a", "d"] => Command::AccountDelete { force: false },
+
+        ["/account", "delete", "force"] |
+        ["/a", "delete", "force"] |
+        ["/account", "d", "force"] |
+        ["/account", "delete", "f"] |
+        ["/a", "d", "force"] |
+        ["/a", "delete", "f"] |
+        ["/account", "d", "f"] |
+        ["/a", "d", "f"] => Command::AccountDelete { force: true },
+
+        ["/account", "delete", ..] |
+        ["/a", "delete", ..] |
+        ["/account", "d", ..] |
+        ["/a", "d", ..] => {
+            let err_msg = format!("{}", "Usage: /account delete or /account delete force".yellow());
             Command::InvalidSyntax { err_msg }
         },
 
