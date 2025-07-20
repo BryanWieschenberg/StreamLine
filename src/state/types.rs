@@ -23,17 +23,17 @@ pub type Clients = Arc<Mutex<HashMap<SocketAddr, Arc<Mutex<Client>>>>>;
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct Room {
-    pub owner: String,
     pub whitelist_enabled: bool,
     pub whitelist: Vec<String>,
     pub roles: Roles,
-    pub users: HashMap<String, RoomUser>
+    pub users: HashMap<String, RoomUser>,
+    #[serde(default, skip_deserializing)]
+    pub online_users: Vec<String>
 }
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct Roles {
-    #[serde(rename = "mod")]
     pub moderator: Vec<String>,
     pub user: Vec<String>,
     pub colors: HashMap<String, String>,

@@ -1,53 +1,188 @@
 {
     "general": {
-        "owner": "bryan",
-        "whitelist_enabled": false,
-        "whitelist": [],
         "roles": {
-            "mod": ["afk", "uptime", "sendfile", "msg", "me", "super.users", "user", "log", "mod"],
-            "user": ["afk", "uptime", "sendfile", "msg", "me", "user", "log"],
             "colors": {
                 "admin": "#FFF000",
                 "mod": "#0000FF",
                 "user": "#FFFFFF"
-            }
+            },
+            "moderator": [
+                "afk",
+                "uptime",
+                "sendfile",
+                "msg",
+                "me",
+                "super.users",
+                "user",
+                "log",
+                "mod"
+            ],
+            "user": [
+                "afk",
+                "uptime",
+                "sendfile",
+                "msg",
+                "me",
+                "user",
+                "log"
+            ]
         },
         "users": {
             "Bryan": {
-                "nick": "Bry",
+                "banned": "",
                 "color": "#0080FF",
-                "role": "admin",
                 "hidden": false,
                 "muted": "",
-                "banned": ""
+                "nick": "Bry",
+                "role": "admin"
+            },
+            "jeff": {
+                "banned": "",
+                "color": "",
+                "hidden": false,
+                "muted": "",
+                "nick": "",
+                "role": "user"
             },
             "louduser": {
-                "nick": "",
+                "banned": "",
                 "color": "",
-                "role": "user",
                 "hidden": false,
                 "muted": "2024-07-15T22:00:00Z",
-                "banned": ""
+                "nick": "",
+                "role": "user"
             },
             "spammer123": {
-                "nick": "",
+                "banned": "*",
                 "color": "",
-                "role": "user",
                 "hidden": false,
                 "muted": "",
-                "banned": "*"
+                "nick": "",
+                "role": "user"
             }
-        }
+        },
+        "whitelist": [],
+        "whitelist_enabled": false
     },
     "special": {
-        "owner": "bryan",
-        "whitelist_enabled": false,
-        "whitelist": [],
         "roles": {
-            "mod": ["afk", "uptime", "sendfile", "msg", "me", "super.users", "user", "log", "mod"],
-            "user": ["afk", "uptime", "sendfile", "msg", "me", "user", "log"],
-            "colors": {}
+            "colors": {},
+            "moderator": [
+                "afk",
+                "uptime",
+                "sendfile",
+                "msg",
+                "me",
+                "super.users",
+                "user",
+                "log",
+                "mod"
+            ],
+            "user": [
+                "afk",
+                "uptime",
+                "sendfile",
+                "msg",
+                "me",
+                "user",
+                "log"
+            ]
         },
-        "users": {}
+        "users": {
+            "bryan": {
+                "banned": "",
+                "color": "",
+                "hidden": false,
+                "muted": "",
+                "nick": "",
+                "role": "owner"
+            }
+        },
+        "whitelist": [],
+        "whitelist_enabled": false
+    },
+    "test": {
+        "roles": {
+            "colors": {},
+            "moderator": [
+                "afk",
+                "uptime",
+                "sendfile",
+                "msg",
+                "me",
+                "super.users",
+                "user",
+                "log",
+                "mod"
+            ],
+            "user": [
+                "afk",
+                "uptime",
+                "sendfile",
+                "msg",
+                "me",
+                "user",
+                "log"
+            ]
+        },
+        "users": {
+            "bryan": {
+                "banned": "",
+                "color": "",
+                "hidden": false,
+                "muted": "",
+                "nick": "",
+                "role": "owner"
+            },
+            "jeff": {
+                "banned": "",
+                "color": "",
+                "hidden": false,
+                "muted": "",
+                "nick": "",
+                "role": "user"
+            }
+        },
+        "whitelist": [],
+        "whitelist_enabled": false
+    },
+    "test2": {
+        "roles": {
+            "colors": {},
+            "moderator": [
+                "afk",
+                "uptime",
+                "sendfile",
+                "msg",
+                "me",
+                "super.users",
+                "user",
+                "log",
+                "mod"
+            ],
+            "user": [
+                "afk",
+                "uptime",
+                "sendfile",
+                "msg",
+                "me",
+                "user",
+                "log"
+            ]
+        },
+        "users": {
+            "bryan": {
+                "banned": "",
+                "color": "",
+                "hidden": false,
+                "muted": "",
+                "nick": "",
+                "role": "owner"
+            }
+        },
+        "whitelist": [
+            "bryan"
+        ],
+        "whitelist_enabled": true
     }
 }

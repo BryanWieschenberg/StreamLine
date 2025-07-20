@@ -8,11 +8,11 @@ use colored::*;
 
 use crate::commands::parser::Command;
 use crate::commands::command_utils::{help_msg_loggedin, generate_hash};
-use crate::state::types::{Client, Clients, ClientState, Rooms};
-use crate::utils::{lock_client, lock_users_storage, lock_rooms, lock_rooms_storage};
+use crate::state::types::{Client, Clients, ClientState, Room, Rooms, RoomUser};
+use crate::utils::{lock_client, lock_clients, lock_users_storage, lock_rooms, lock_rooms_storage};
 use super::CommandResult;
 
-pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _clients: &Clients, rooms: &Rooms, username: &String) -> io::Result<CommandResult> {
+pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
             let mut client = lock_client(&client)?;
@@ -28,6 +28,16 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _clients: &Cli
         }
 
         Command::Quit => {
+            let addr = {
+                let c = lock_client(&client)?;
+                c.addr
+            };
+
+            {
+                let mut clients = lock_clients(&clients)?;
+                clients.remove(&addr);
+            }
+
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Exiting...".green())?;
             client.stream.shutdown(std::net::Shutdown::Both)?;
@@ -331,7 +341,13 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _clients: &Cli
             for (room_name, room_arc) in locked_rooms.iter() {
                 if let Ok(room) = room_arc.lock() {
                     if !room.whitelist_enabled || room.whitelist.contains(&username) {
-                        visible_rooms.push(room_name.clone());
+                        let count = room.online_users.len();
+                        if count == 1 {
+                            visible_rooms.push(format!("> {} ({} user online)", room_name, count));
+                        }
+                        else {
+                            visible_rooms.push(format!("> {} ({} users online)", room_name, count));
+                        }
                     }
                 }
             }
@@ -340,9 +356,155 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _clients: &Cli
             if visible_rooms.is_empty() {
                 writeln!(client.stream, "{}", "No available rooms found".yellow())?;
             } else {
-                writeln!(client.stream, "{}", format!("Available rooms:\n{}", visible_rooms.join(", ")).green())?;
+                writeln!(client.stream, "{}", format!("Available rooms:\n{}", visible_rooms.join("\n")).green())?;
             }
 
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomCreate { name, whitelist } => {
+            let _lock = lock_rooms_storage()?;
+
+            {
+                let rooms = lock_rooms(rooms)?;
+                if rooms.contains_key(&name) {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Room already exists".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            }
+                
+            let new_room = json!({
+                "whitelist_enabled": whitelist,
+                "whitelist": if whitelist { vec![username.clone()] } else { Vec::<String>::new() },
+                "roles": {
+                    "moderator": ["afk", "uptime", "sendfile", "msg", "me", "super.users", "user", "log", "mod"],
+                    "user": ["afk", "uptime", "sendfile", "msg", "me", "user", "log"],
+                    "colors": {}
+                },
+                "users": {
+                    username: {
+                        "nick": "",
+                        "color": "",
+                        "role": "owner",
+                        "hidden": false,
+                        "muted": "",
+                        "banned": ""
+                    }
+                }
+            });
+
+            let file_path = "data/rooms.json";
+            let file = File::open(file_path)?;
+            let reader = BufReader::new(file);
+            let mut rooms_json: Value = serde_json::from_reader(reader)?;
+
+            rooms_json[&name] = new_room.clone();
+
+            let file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open(file_path)?;
+            
+            let mut writer = std::io::BufWriter::new(file);
+            let formatter = PrettyFormatter::with_indent(b"    ");
+            let mut ser = Serializer::with_formatter(&mut writer, formatter);
+            rooms_json.serialize(&mut ser)?;
+
+            let room_obj = Room {
+                whitelist_enabled: whitelist,
+                whitelist: if whitelist { vec![username.clone()] } else { vec![] },
+                roles: serde_json::from_value(new_room["roles"].clone()).unwrap(),
+                users: serde_json::from_value(new_room["users"].clone()).unwrap(),
+                online_users: Vec::new()
+            };
+
+            {
+                let mut rooms = lock_rooms(rooms)?;
+                rooms.insert(name.clone(), Arc::new(Mutex::new(room_obj)));
+            }
+
+            let mut client = lock_client(&client)?;
+            if whitelist {
+                writeln!(client.stream, "{}", format!("Whitelisted room '{}' created successfully", name).green())?;
+            }
+            else {
+                writeln!(client.stream, "{}", format!("Room '{}' created successfully", name).green())?;                
+            }
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomJoin { name } => {
+            let _lock = lock_rooms_storage()?;
+            let rooms = lock_rooms(rooms)?;
+
+            let room_arc = match rooms.get(&name) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    writeln!(lock_client(&client)?.stream, "{}", format!("Room '{}' not found", name).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+            
+            let mut room = match room_arc.lock() {
+                Ok(r) => r,
+                Err(_) => {
+                    writeln!(lock_client(&client)?.stream, "{}", "Error: Could not lock room".red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            if room.whitelist_enabled && !room.whitelist.contains(username) {
+                writeln!(lock_client(&client)?.stream, "{}", "Access denied: you are not whitelisted for this room".yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            // Add user to room's rooms.json users list if it's their first time joining
+            if !room.users.contains_key(username) {
+                room.users.insert(username.clone(), RoomUser {
+                    nick: "".to_string(),
+                    color: "".to_string(),
+                    role: "user".to_string(),
+                    hidden: false,
+                    muted: "".to_string(),
+                    banned: "".to_string()
+                });
+
+                let file = File::open("data/rooms.json")?;
+                let reader = BufReader::new(file);
+                let mut rooms_json: Value = serde_json::from_reader(reader)?;
+
+                if let Some(room_json) = rooms_json.get_mut(&name) {
+                    room_json["users"][username] = json!({
+                        "nick": "",
+                        "color": "",
+                        "role": "user",
+                        "hidden": false,
+                        "muted": "",
+                        "banned": ""
+                    });
+
+                    let file = OpenOptions::new().write(true).truncate(true).open("data/rooms.json")?;
+                    let mut writer = std::io::BufWriter::new(file);
+                    let formatter = PrettyFormatter::with_indent(b"    ");
+                    let mut ser = Serializer::with_formatter(&mut writer, formatter);
+                    rooms_json.serialize(&mut ser)?;
+                }
+            }
+
+            // Add user to online list if not already there
+            if !room.online_users.contains(username) {
+                room.online_users.push(username.clone());
+            }
+
+            // Update client state
+            let mut client = lock_client(&client)?;
+            client.state = ClientState::InRoom {
+                username: username.clone(),
+                room: name.clone()
+            };
+
+            writeln!(client.stream, "{}", format!("Joined room: {}", name).green())?;
             Ok(CommandResult::Handled)
         }
 
@@ -354,7 +516,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _clients: &Cli
 
         Command::Unavailable => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Command unavailable, use /help to see available commands".red())?;
+            writeln!(client.stream, "{}", "Command not available, use /help to see available commands".red())?;
             Ok(CommandResult::Handled)
         }
     }

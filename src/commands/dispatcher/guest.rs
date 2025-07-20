@@ -9,7 +9,7 @@ use colored::*;
 use crate::commands::parser::Command;
 use crate::commands::command_utils::{help_msg_guest, generate_hash, is_user_logged_in};
 use crate::state::types::{Client, Clients, ClientState, Rooms};
-use crate::utils::{lock_client, lock_users_storage};
+use crate::utils::{lock_client, lock_clients, lock_users_storage};
 use super::CommandResult;
 
 pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, _rooms: &Rooms) -> io::Result<CommandResult> {
@@ -28,9 +28,19 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
         }
 
         Command::Quit => {
+            let addr = {
+                let c = lock_client(&client)?;
+                c.addr
+            };
+
+            {
+                let mut clients = lock_clients(&clients)?;
+                clients.remove(&addr);
+            }
+
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Exiting...".green())?;
-            client.stream.shutdown(std::net::Shutdown::Both)?;
+            client.stream.shutdown(std::net::Shutdown::Both)?;     
             Ok(CommandResult::Stop)
         }
 
@@ -226,6 +236,18 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             Ok(CommandResult::Handled)
         }
 
+        Command::RoomCreate { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must log in to create a room".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomJoin { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must log in to join a room".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
         Command::InvalidSyntax {err_msg } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", err_msg)?;
@@ -234,7 +256,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
 
         Command::Unavailable => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Command unavailable, use /help to see available commands".red())?;
+            writeln!(client.stream, "{}", "Command not available, use /help to see available commands".red())?;
             Ok(CommandResult::Handled)
         }
     }
