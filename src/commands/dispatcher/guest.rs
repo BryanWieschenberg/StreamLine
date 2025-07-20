@@ -4,7 +4,6 @@ use serde::Serialize;
 use serde_json::{Value, json, Serializer};
 use serde_json::ser::PrettyFormatter;
 use std::sync::{Arc, Mutex};
-
 use colored::*;
 
 use crate::commands::parser::Command;
@@ -93,7 +92,14 @@ pub fn handle_guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &
 
             match users.get(&username) {
                 Some(user_obj) => {
-                    let stored_hash = user_obj.get("password").and_then(|v| v.as_str()).unwrap_or("");
+                    let stored_hash = match user_obj.get("password").and_then(|v| v.as_str()) {
+                        Some(hash) => hash,
+                        None => {
+                            let mut client = lock_client(&client)?;
+                            writeln!(client.stream, "{}", "Error: Malformed user data".yellow())?;
+                            return Ok(CommandResult::Handled);
+                        }
+                    };
                     if generate_hash(&password) == stored_hash {
                         let mut client = lock_client(&client)?;
                         client.state = ClientState::LoggedIn { username: username.clone() };
@@ -113,6 +119,18 @@ pub fn handle_guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &
         }
 
         Command::AccountLogout => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "You are not currently logged in".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountEditUsername { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "You are not currently logged in".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountEditPassword { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "You are not currently logged in".yellow())?;
             Ok(CommandResult::Handled)

@@ -5,8 +5,8 @@ use colored::*;
 use crate::commands::parser::Command;
 use crate::commands::command_utils::get_help_message;
 use crate::state::types::{Client, Clients};
-use super::CommandResult;
 use crate::utils::{lock_client};
+use super::CommandResult;
 
 pub fn handle_inroom_command(cmd: Command, client: Arc<Mutex<Client>>, _clients: &Clients, username: &String, room: &String) -> io::Result<CommandResult> {
     match cmd {
@@ -45,6 +45,18 @@ pub fn handle_inroom_command(cmd: Command, client: Arc<Mutex<Client>>, _clients:
         Command::AccountLogout => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "You must be in the lobby to log out".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountEditUsername { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "You must be in the lobby to edit your account".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::AccountEditPassword { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "You must be in the lobby to edit your account".yellow())?;
             Ok(CommandResult::Handled)
         }
 

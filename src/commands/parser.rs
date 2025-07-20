@@ -10,8 +10,8 @@ pub enum Command {
     AccountRegister { username: String, password: String, confirm: String },
     AccountLogin { username: String, password: String },
     AccountLogout,
-    // AccountEditUsername { username: String },
-    // AccountEditPassword { username: String },
+    AccountEditUsername { username: String },
+    AccountEditPassword { current_password: String, new_password: String },
     // AccountImport { filename: String },
     // AccountExport { filename: String },
     // AccountDelete,
@@ -43,7 +43,7 @@ pub fn parse_command(input: &str) -> Command {
         ["/a", "r", ..] => {
             let err_msg = format!("{}", "Usage: /account register <username> <password> <password confirm>".yellow());
             Command::InvalidSyntax { err_msg }
-        }
+        },
 
         ["/account", "login", u, p] |
         ["/a", "login", u, p] |
@@ -59,10 +59,41 @@ pub fn parse_command(input: &str) -> Command {
         ["/a", "l", ..] => {
             let err_msg = format!("{}", "Usage: /account login <username> <password>".yellow());
             Command::InvalidSyntax { err_msg }
-        }
+        },
 
         ["/account", "logout"] |
         ["/a", "logout"] => Command::AccountLogout {},
+
+        ["/account", "edit", "username", username] |
+        ["/a", "edit", "username", username] |
+        ["/account", "e", "username", username] |
+        ["/account", "edit", "u", username] |
+        ["/a", "e", "username", username] |
+        ["/a", "edit", "u", username] |
+        ["/account", "e", "u", username] |
+        ["/a", "e", "u", username] => Command::AccountEditUsername {
+            username: username.to_string()
+        },
+
+        ["/account", "edit", "password", current_password, new_password] |
+        ["/a", "edit", "password", current_password, new_password] |
+        ["/account", "e", "password", current_password, new_password] |
+        ["/account", "edit", "p", current_password, new_password] |
+        ["/a", "e", "password", current_password, new_password] |
+        ["/a", "edit", "p", current_password, new_password] |
+        ["/account", "e", "p", current_password, new_password] |
+        ["/a", "e", "p", current_password, new_password] => Command::AccountEditPassword {
+            current_password: current_password.to_string(),
+            new_password: new_password.to_string()
+        },
+
+        ["/account", "edit", ..] |
+        ["/a", "edit", ..] |
+        ["/account", "e", ..] |
+        ["/a", "e", ..] => {
+            let err_msg = format!("{}", "Usage: /account edit username <new username> or /account edit password <current password> <new password>".yellow());
+            Command::InvalidSyntax { err_msg }
+        },
 
         ["/account"] |
         ["/a"] => Command::Account,
