@@ -73,8 +73,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients) -> std::
                 if msg.starts_with("/") {
                     let command: Command = parse_command(&msg);
                     
-                    let mut client = lock_client(&client_arc)?;
-                    match dispatch_command(command, &mut *client)? {
+                    match dispatch_command(command, Arc::clone(&client_arc), &clients)? {
                         CommandResult::Handled => continue,
                         CommandResult::Stop => break
                     }

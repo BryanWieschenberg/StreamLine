@@ -44,7 +44,6 @@ fn main() -> std::io::Result<()> {
     // Spawn a thread to handle receiving messages from the server
     thread::spawn(move || handle_recv(stream_clone));
 
-    //TODO: /exit wont leave, server must send signal here so client program will terminate
     // Handles sending messages to the server
     let stdin = io::stdin();
     for line in stdin.lock().lines() {

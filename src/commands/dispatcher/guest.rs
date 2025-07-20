@@ -3,28 +3,33 @@ use std::fs::{File, OpenOptions};
 use serde::Serialize;
 use serde_json::{Value, json, Serializer};
 use serde_json::ser::PrettyFormatter;
+use std::sync::{Arc, Mutex};
+
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::{get_help_message, generate_hash};
-use crate::state::types::{Client, ClientState};
-use crate::utils::{lock_users};
+use crate::commands::command_utils::{get_help_message, generate_hash, is_user_logged_in};
+use crate::state::types::{Client, Clients, ClientState};
+use crate::utils::{lock_client, lock_users};
 use super::CommandResult;
 
-pub fn handle_guest_command(cmd: Command, client: &mut Client) -> io::Result<CommandResult> {
+pub fn handle_guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
+            let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}{}", get_help_message().green(), "\x1b[0m")?;
             io::stdout().flush()?;
             Ok(CommandResult::Handled)
         }
 
         Command::Ping => {
-            writeln!(client.stream, "{}", "Pong!".green())?;
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "PONG.".green())?;
             Ok(CommandResult::Handled)
         }
 
         Command::Quit => {
+            let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Exiting...".green())?;
             client.stream.shutdown(std::net::Shutdown::Both)?;
             Ok(CommandResult::Stop)
@@ -32,6 +37,7 @@ pub fn handle_guest_command(cmd: Command, client: &mut Client) -> io::Result<Com
 
         Command::AccountRegister {username, password, confirm} => {
             if password != confirm {
+                let mut client = lock_client(&client)?;
                 writeln!(client.stream, "{}", "Error: Passwords don't match".yellow())?;
                 return Ok(CommandResult::Handled)
             }
@@ -43,6 +49,7 @@ pub fn handle_guest_command(cmd: Command, client: &mut Client) -> io::Result<Com
             let mut users: Value = serde_json::from_reader(reader)?;
             
             if users.get(&username).is_some() {
+                let mut client = lock_client(&client)?;
                 writeln!(client.stream, "{}", "Error: Name is already taken".yellow())?;
                 return Ok(CommandResult::Handled);
             }
@@ -64,6 +71,7 @@ pub fn handle_guest_command(cmd: Command, client: &mut Client) -> io::Result<Com
             let mut ser = Serializer::with_formatter(&mut writer, formatter);
             users.serialize(&mut ser)?;
 
+            let mut client = lock_client(&client)?;
             client.state = ClientState::LoggedIn { username: username.clone() };
             writeln!(client.stream, "{}", format!("User Registered: {}", username).green())?;
 
@@ -71,6 +79,12 @@ pub fn handle_guest_command(cmd: Command, client: &mut Client) -> io::Result<Com
         }
 
         Command::AccountLogin {username, password} => {
+            if is_user_logged_in(clients, &username) {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", "Error: User is already logged in".yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+
             let _lock = lock_users()?;
 
             let file = File::open("data/users.json")?;
@@ -81,13 +95,16 @@ pub fn handle_guest_command(cmd: Command, client: &mut Client) -> io::Result<Com
                 Some(user_obj) => {
                     let stored_hash = user_obj.get("password").and_then(|v| v.as_str()).unwrap_or("");
                     if generate_hash(&password) == stored_hash {
+                        let mut client = lock_client(&client)?;
                         client.state = ClientState::LoggedIn { username: username.clone() };
                         writeln!(client.stream, "{}", format!("Logged in as: {}", username).green())?;
                     } else {
+                        let mut client = lock_client(&client)?;
                         writeln!(client.stream, "{}", "Error: Incorrect password".yellow())?;
                     }
                 }
                 None => {
+                    let mut client = lock_client(&client)?;
                     writeln!(client.stream, "{}", "Error: Username not found".yellow())?;
                 }
             }
@@ -96,21 +113,25 @@ pub fn handle_guest_command(cmd: Command, client: &mut Client) -> io::Result<Com
         }
 
         Command::AccountLogout => {
+            let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "You are not currently logged in".yellow())?;
             Ok(CommandResult::Handled)
         }
 
         Command::Account => {
+            let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Currently a guest, please register or log into an account to join a room".green())?;
             Ok(CommandResult::Handled)
         }
 
         Command::InvalidSyntax {err_msg } => {
+            let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", err_msg)?;
             Ok(CommandResult::Handled)
         }
 
         Command::Unavailable => {
+            let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Command unavailable, use /help to see available commands".red())?;
             Ok(CommandResult::Handled)
         }

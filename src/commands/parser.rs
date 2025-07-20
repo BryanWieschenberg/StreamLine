@@ -1,21 +1,25 @@
 use colored::*;
 
-#[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub enum Command {
     Help,
     Ping,
     Quit,
 
+    Account,
     AccountRegister { username: String, password: String, confirm: String },
     AccountLogin { username: String, password: String },
     AccountLogout,
-    Account,
+    // AccountEditUsername { username: String },
+    // AccountEditPassword { username: String },
+    // AccountImport { filename: String },
+    // AccountExport { filename: String },
+    // AccountDelete,
 
     InvalidSyntax { err_msg: String },
     Unavailable
 }
 
-#[allow(dead_code)]
 pub fn parse_command(input: &str) -> Command {
     let tokens: Vec<&str> = input.trim().split_whitespace().collect();
 
