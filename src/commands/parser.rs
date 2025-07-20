@@ -16,6 +16,8 @@ pub enum Command {
     AccountExport { filename: String },
     AccountDelete { force: bool },
 
+    RoomList,
+    
     InvalidSyntax { err_msg: String },
     Unavailable
 }
@@ -153,23 +155,8 @@ pub fn parse_command(input: &str) -> Command {
             Command::InvalidSyntax { err_msg }
         }
 
-        // ["/account", "edit", "username", new] => Command::AccountEditUsername(new.to_string()),
-        // ["/account", "edit", "password", new, confirm] => Command::AccountEditPassword {
-        //     new: new.to_string(),
-        //     confirm: confirm.to_string(),
-        // },
-        
-        // ["/account", "export"] => Command::AccountExport(None),
-        // ["/account", "export", filename] => Command::AccountExport(Some(filename.to_string())),
-        // ["/account", "delete"] => Command::AccountDelete,
-        // ["/account", "import", file] => Command::AccountImport(file.to_string()),
-
-        // Room commands
-        // ["/room"] => Command::RoomList,
-        // ["/room", "join", room] => Command::RoomJoin(room.to_string()),
-        // ["/room", "create", room] => Command::RoomCreate(room.to_string()),
-        // ["/room", "delete", room] => Command::RoomDelete(room.to_string()),
-        // ["/room", "import", file] => Command::RoomImport(file.to_string()),
+        ["/room"] |
+        ["/r"] => Command::RoomList,
 
         _ => Command::Unavailable
     }

@@ -1,7 +1,27 @@
 use sha2::{Sha256, Digest};
 use crate::state::types::{Clients, ClientState};
 
-pub fn get_help_message() -> &'static str {
+pub fn help_msg_guest() -> &'static str {
+r#"Available commands:
+/help      - Show this help menu
+/ping      - Check connection to the server
+/clear     - Clear the chat screen
+/quit      - Exit the application
+/room      - List or join chat rooms
+/account   - Manage your account"#
+}
+
+pub fn help_msg_loggedin() -> &'static str {
+r#"Available commands:
+/help      - Show this help menu
+/ping      - Check connection to the server
+/clear     - Clear the chat screen
+/quit      - Exit the application
+/room      - List or join chat rooms
+/account   - Manage your account"#
+}
+
+pub fn help_msg_inroom() -> &'static str {
 r#"Available commands:
 /help      - Show this help menu
 /ping      - Check connection to the server

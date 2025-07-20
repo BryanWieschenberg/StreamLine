@@ -3,16 +3,16 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::get_help_message;
-use crate::state::types::{Client, Clients};
+use crate::commands::command_utils::help_msg_inroom;
+use crate::state::types::{Client, Clients, Rooms};
 use crate::utils::{lock_client};
 use super::CommandResult;
 
-pub fn handle_inroom_command(cmd: Command, client: Arc<Mutex<Client>>, _clients: &Clients, username: &String, room: &String) -> io::Result<CommandResult> {
+pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, _clients: &Clients, _rooms: &Rooms, username: &String, room: &String) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}{}", get_help_message().green(), "\x1b[0m")?;
+            writeln!(client.stream, "{}{}", help_msg_inroom().green(), "\x1b[0m")?;
             io::stdout().flush()?;
             Ok(CommandResult::Handled)
         }
@@ -81,6 +81,12 @@ pub fn handle_inroom_command(cmd: Command, client: Arc<Mutex<Client>>, _clients:
         Command::Account => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", format!("Currently logged in as: {} (room: {})", username, room).green())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomList => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must be in the lobby to view rooms".yellow())?;
             Ok(CommandResult::Handled)
         }
 

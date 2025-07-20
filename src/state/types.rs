@@ -1,8 +1,62 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::net::{TcpStream, SocketAddr};
 use std::sync::{Arc, Mutex};
 use once_cell::sync::Lazy;
+use serde::Deserialize;
 
+#[allow(dead_code)]
+#[derive(Clone)]
+pub enum ClientState {
+    Guest,
+    LoggedIn {username: String},
+    InRoom {username: String, room: String}
+}
+
+pub struct Client {
+    pub stream: TcpStream,
+    pub addr: SocketAddr,
+    pub state: ClientState
+}
+
+pub type Clients = Arc<Mutex<HashMap<SocketAddr, Arc<Mutex<Client>>>>>;
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct Room {
+    pub owner: String,
+    pub whitelist_enabled: bool,
+    pub whitelist: Vec<String>,
+    pub roles: Roles,
+    pub users: HashMap<String, RoomUser>
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct Roles {
+    #[serde(rename = "mod")]
+    pub moderator: Vec<String>,
+    pub user: Vec<String>,
+    pub colors: HashMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct RoomUser {
+    pub nick: String,
+    pub color: String,
+    pub role: String,
+    pub hidden: bool,
+    pub muted: String,
+    pub banned: String,
+}
+
+pub type Rooms = Arc<Mutex<HashMap<String, Arc<Mutex<Room>>>>>;
+
+// User file access lock
+pub static USERS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+pub static ROOMS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+// --- For future TUI implementation ---
 #[allow(dead_code)]
 pub enum InputMode {
     Normal,
@@ -23,40 +77,4 @@ pub struct App {
     pub history_index: Option<usize>,  // For up/down command history cycling
     pub command_history: Vec<String>,  // Command history
 }
-
-#[allow(dead_code)]
-#[derive(Clone)]
-pub enum ClientState {
-    Guest,
-    LoggedIn {username: String},
-    InRoom {username: String, room: String}
-}
-
-#[allow(dead_code)]
-pub struct Client {
-    pub stream: TcpStream,
-    pub addr: SocketAddr,
-    pub state: ClientState
-}
-
-#[allow(dead_code)]
-pub type Clients = Arc<Mutex<HashMap<SocketAddr, Arc<Mutex<Client>>>>>;
-
-#[allow(dead_code)]
-pub struct Room {
-    pub name: String,
-    pub users: HashSet<String>,
-    pub creator: String,
-    pub whitelist_enabled: bool,
-    pub whitelist: HashSet<String>,
-    pub roles: HashMap<String, String>
-}
-
-#[allow(dead_code)]
-pub type Rooms = Arc<Mutex<HashMap<String, Room>>>;
-
-// User file access lock
-pub static USERS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
-
-#[allow(dead_code)]
-pub static ROOMS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+// -------------------------------------

@@ -7,16 +7,16 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::{get_help_message, generate_hash};
-use crate::state::types::{Client, Clients, ClientState};
-use crate::utils::{lock_client, lock_users};
+use crate::commands::command_utils::{help_msg_loggedin, generate_hash};
+use crate::state::types::{Client, Clients, ClientState, Rooms};
+use crate::utils::{lock_client, lock_users_storage, lock_rooms, lock_rooms_storage};
 use super::CommandResult;
 
-pub fn handle_loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _clients: &Clients, username: &String) -> io::Result<CommandResult> {
+pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _clients: &Clients, rooms: &Rooms, username: &String) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}{}", get_help_message().green(), "\x1b[0m")?;
+            writeln!(client.stream, "{}{}", help_msg_loggedin().green(), "\x1b[0m")?;
             io::stdout().flush()?;
             Ok(CommandResult::Handled)
         }
@@ -56,7 +56,7 @@ pub fn handle_loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _client
 
         Command::AccountEditUsername { username: new_username } => {
             let mut client = lock_client(&client)?;
-            let _lock = lock_users()?;
+            let _lock = lock_users_storage()?;
 
             let file = File::open("data/users.json")?;
             let reader = BufReader::new(file);
@@ -95,7 +95,7 @@ pub fn handle_loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _client
 
         Command::AccountEditPassword { current_password, new_password } => {
             let mut client = lock_client(&client)?;
-            let _lock = lock_users()?;
+            let _lock = lock_users_storage()?;
 
             let file = File::open("data/users.json")?;
             let reader = BufReader::new(file);
@@ -176,7 +176,7 @@ pub fn handle_loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _client
                 }
             };
 
-            let _lock = lock_users()?;
+            let _lock = lock_users_storage()?;
 
             let file = File::open("data/users.json")?;
             let reader = BufReader::new(file);
@@ -206,7 +206,7 @@ pub fn handle_loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _client
         }
 
         Command::AccountExport { filename } => {
-            let _lock = lock_users()?;
+            let _lock = lock_users_storage()?;
 
             let file = File::open("data/users.json")?;
             let reader = BufReader::new(file);
@@ -279,7 +279,7 @@ pub fn handle_loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _client
                 }
             }
 
-            let _lock = lock_users()?;
+            let _lock = lock_users_storage()?;
             let file = File::open("data/users.json")?;
             let reader = BufReader::new(file);
             let mut users: Value = serde_json::from_reader(reader)?;
@@ -319,6 +319,30 @@ pub fn handle_loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, _client
         Command::Account => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", format!("Currently logged in as: {} (not in a room)", username).green())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomList => {
+            let _lock = lock_rooms_storage()?;
+
+            let locked_rooms = lock_rooms(rooms)?;
+            let mut visible_rooms = Vec::new();
+
+            for (room_name, room_arc) in locked_rooms.iter() {
+                if let Ok(room) = room_arc.lock() {
+                    if !room.whitelist_enabled || room.whitelist.contains(&username) {
+                        visible_rooms.push(room_name.clone());
+                    }
+                }
+            }
+
+            let mut client = lock_client(&client)?;
+            if visible_rooms.is_empty() {
+                writeln!(client.stream, "{}", "No available rooms found".yellow())?;
+            } else {
+                writeln!(client.stream, "{}", format!("Available rooms:\n{}", visible_rooms.join(", ")).green())?;
+            }
+
             Ok(CommandResult::Handled)
         }
 

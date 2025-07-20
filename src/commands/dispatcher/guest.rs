@@ -7,16 +7,16 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::{get_help_message, generate_hash, is_user_logged_in};
-use crate::state::types::{Client, Clients, ClientState};
-use crate::utils::{lock_client, lock_users};
+use crate::commands::command_utils::{help_msg_guest, generate_hash, is_user_logged_in};
+use crate::state::types::{Client, Clients, ClientState, Rooms};
+use crate::utils::{lock_client, lock_users_storage};
 use super::CommandResult;
 
-pub fn handle_guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients) -> io::Result<CommandResult> {
+pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, _rooms: &Rooms) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}{}", get_help_message().green(), "\x1b[0m")?;
+            writeln!(client.stream, "{}{}", help_msg_guest().green(), "\x1b[0m")?;
             io::stdout().flush()?;
             Ok(CommandResult::Handled)
         }
@@ -41,7 +41,7 @@ pub fn handle_guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &
                 return Ok(CommandResult::Handled)
             }
 
-            let _lock = lock_users()?;
+            let _lock = lock_users_storage()?;
 
             let file = File::open("data/users.json")?;
             let reader = BufReader::new(file);
@@ -84,7 +84,7 @@ pub fn handle_guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &
                 return Ok(CommandResult::Handled);
             }
 
-            let _lock = lock_users()?;
+            let _lock = lock_users_storage()?;
 
             let file = File::open("data/users.json")?;
             let reader = BufReader::new(file);
@@ -173,7 +173,7 @@ pub fn handle_guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &
                 }
             };
 
-            let _lock = lock_users()?;
+            let _lock = lock_users_storage()?;
 
             let file = File::open("data/users.json")?;
             let reader = BufReader::new(file);
@@ -216,7 +216,13 @@ pub fn handle_guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &
 
         Command::Account => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Currently a guest, please register or log into an account to join a room".green())?;
+            writeln!(client.stream, "{}", "Must register or log into an account to join a room".green())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomList => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must log in to view rooms".yellow())?;
             Ok(CommandResult::Handled)
         }
 

@@ -1,6 +1,6 @@
 {
     "general": {
-        "creator": "bryan",
+        "owner": "bryan",
         "whitelist_enabled": false,
         "whitelist": [],
         "roles": {
@@ -38,5 +38,16 @@
                 "banned": "*"
             }
         }
+    },
+    "special": {
+        "owner": "bryan",
+        "whitelist_enabled": false,
+        "whitelist": [],
+        "roles": {
+            "mod": ["afk", "uptime", "sendfile", "msg", "me", "super.users", "user", "log", "mod"],
+            "user": ["afk", "uptime", "sendfile", "msg", "me", "user", "log"],
+            "colors": {}
+        },
+        "users": {}
     }
 }

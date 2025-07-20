@@ -12,18 +12,18 @@ pub enum CommandResult {
 }
 
 use crate::commands::parser::Command;
-use crate::state::types::{Client, Clients, ClientState};
+use crate::state::types::{Client, Clients, ClientState, Rooms};
 use std::io;
 
-pub fn dispatch_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients) -> io::Result<CommandResult> {
+pub fn dispatch_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms) -> io::Result<CommandResult> {
     let state = {
         let locked = lock_client(&client)?;
         locked.state.clone()
     };
     
     match state {
-        ClientState::Guest => guest::handle_guest_command(cmd, client, clients),
-        ClientState::LoggedIn { username } => loggedin::handle_loggedin_command(cmd, client, clients, &username),
-        ClientState::InRoom { username, room } => inroom::handle_inroom_command(cmd, client, clients, &username, &room)
+        ClientState::Guest => guest::guest_command(cmd, client, clients, rooms),
+        ClientState::LoggedIn { username } => loggedin::loggedin_command(cmd, client, clients, rooms, &username),
+        ClientState::InRoom { username, room } => inroom::inroom_command(cmd, client, clients, rooms, &username, &room)
     }
 }
