@@ -154,6 +154,57 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
+        Command::DM { recipient, message } => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room {} not found", room).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let room_guard = lock_room(&room_arc)?;
+            if !room_guard.online_users.contains(&recipient) {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("{} is not currently online", recipient).yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            let clients_map = lock_clients(clients)?;
+            let mut found = false;
+            for client_arc in clients_map.values() {
+                let mut c = match client_arc.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => {
+                        eprintln!("Client lock poisoned: {poisoned}");
+                        continue;
+                    }
+                };
+
+                match &c.state {
+                    ClientState::InRoom { username: uname, room: rname, .. }
+                        if uname == &recipient && rname == room => {
+                            writeln!(c.stream, "{}", format!("(Private) {}: {}", username, message).cyan().italic().to_string())?;
+                            found = true;
+                            break;
+                        }
+                    _ => continue,
+                }
+            }
+
+            let mut client = lock_client(&client)?;
+            if found {
+                writeln!(client.stream, "{}", format!("Message sent to {}", recipient).green())?;
+            }
+            else {
+                writeln!(client.stream, "{}", format!("Failed to deliver message to {}", recipient).red())?;
+            }
+
+            Ok(CommandResult::Handled)
+        }
+
         Command::AccountRegister { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Already logged in".yellow())?;

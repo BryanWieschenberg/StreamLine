@@ -7,6 +7,7 @@ pub enum Command {
     Quit,
     Leave,
     Status,
+    DM { recipient: String, message: String },
 
     Account,
     AccountRegister { username: String, password: String, confirm: String },
@@ -37,6 +38,20 @@ pub fn parse_command(input: &str) -> Command {
         ["quit"] | ["exit"] | ["q"] | ["e"] => Command::Quit,
         ["leave"] => Command::Leave,
         ["status"] => Command::Status,
+        
+        ["message", recipient, message] |
+        ["msg", recipient, message] |
+        ["dm", recipient, message] => Command::DM {
+            recipient: recipient.to_string(),
+            message: message.to_string()
+        },
+
+        ["message", ..] |
+        ["msg", ..] |
+        ["dm", ..]=> {
+            let err_msg = format!("{}", "Usage: /message <recipient> <message>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
 
         ["account", "register", username, password, confirm_password] |
         ["a", "register", username, password, confirm_password] |

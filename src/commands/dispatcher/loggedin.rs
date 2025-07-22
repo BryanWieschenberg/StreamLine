@@ -56,6 +56,12 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             Ok(CommandResult::Handled)
         }
 
+        Command::DM { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must be in a room to send direct messages".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
         Command::AccountRegister { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "You are already logged in".yellow())?;

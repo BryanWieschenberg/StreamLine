@@ -58,6 +58,14 @@
                 "nick": "",
                 "role": "user"
             },
+            "shit": {
+                "banned": "",
+                "color": "",
+                "hidden": false,
+                "muted": "",
+                "nick": "",
+                "role": "user"
+            },
             "spammer123": {
                 "banned": "*",
                 "color": "",

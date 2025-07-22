@@ -55,6 +55,12 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             Ok(CommandResult::Handled)
         }
 
+        Command::DM { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must be in a room to send direct messages".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
         Command::AccountRegister {username, password, confirm} => {
             if password != confirm {
                 let mut client = lock_client(&client)?;
