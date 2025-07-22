@@ -36,6 +36,14 @@
                 "nick": "Bry",
                 "role": "admin"
             },
+            "bryan": {
+                "banned": "",
+                "color": "",
+                "hidden": false,
+                "muted": "",
+                "nick": "",
+                "role": "user"
+            },
             "jeff": {
                 "banned": "",
                 "color": "",

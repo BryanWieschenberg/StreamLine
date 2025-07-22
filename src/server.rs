@@ -21,7 +21,7 @@ fn broadcast_message(msg: &str, sender_arc: &Arc<Mutex<Client>>, clients: &Clien
     
     let sender = lock_client(sender_arc)?;
     let (sender_username, sender_room) = match &sender.state {
-        ClientState::InRoom { username, room } => (username.clone(), room.clone()),
+        ClientState::InRoom { username, room, .. } => (username.clone(), room.clone()),
         _ => return Ok(()), // Sender not in room, don't broadcast
     };
     let sender_addr = sender.addr;

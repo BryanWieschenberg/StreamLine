@@ -24,6 +24,6 @@ pub fn dispatch_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
     match state {
         ClientState::Guest => guest::guest_command(cmd, client, clients, rooms),
         ClientState::LoggedIn { username } => loggedin::loggedin_command(cmd, client, clients, rooms, &username),
-        ClientState::InRoom { username, room } => inroom::inroom_command(cmd, client, clients, rooms, &username, &room)
+        ClientState::InRoom { username, room, .. } => inroom::inroom_command(cmd, client, clients, rooms, &username, &room)
     }
 }

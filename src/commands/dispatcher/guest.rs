@@ -46,7 +46,13 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
 
         Command::Leave => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "You must be in a room to leave the room".yellow())?;
+            writeln!(client.stream, "{}", "Must be in a room to leave the room".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::Status => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must be in a room to see your room status".yellow())?;
             Ok(CommandResult::Handled)
         }
 

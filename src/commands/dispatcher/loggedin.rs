@@ -3,6 +3,7 @@ use std::fs::{File, OpenOptions};
 use serde::Serialize;
 use serde_json::{json, Serializer, Value};
 use serde_json::ser::PrettyFormatter;
+use std::time::SystemTime;
 use std::sync::{Arc, Mutex};
 use colored::*;
 
@@ -46,7 +47,13 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
 
         Command::Leave => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "You must be in a room to leave the room".yellow())?;
+            writeln!(client.stream, "{}", "Must be in a room to leave the room".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::Status => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must be in a room to see your room status".yellow())?;
             Ok(CommandResult::Handled)
         }
 
@@ -525,7 +532,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             let mut client = lock_client(&client)?;
             client.state = ClientState::InRoom {
                 username: username.clone(),
-                room: name.clone()
+                room: name.clone(),
+                room_time: Some(SystemTime::now()),
             };
 
             writeln!(client.stream, "{}", format!("Joined room: {}", name).green())?;

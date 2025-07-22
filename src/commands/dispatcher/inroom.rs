@@ -5,7 +5,7 @@ use colored::*;
 use crate::commands::parser::Command;
 use crate::commands::command_utils::help_msg_inroom;
 use crate::state::types::{Client, Clients, ClientState, Rooms};
-use crate::utils::{lock_client, lock_clients, lock_rooms};
+use crate::utils::{lock_client, lock_clients, lock_room, lock_rooms};
 use super::CommandResult;
 
 pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, room: &String) -> io::Result<CommandResult> {
@@ -68,6 +68,52 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
         
+        Command::Status => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room '{}' not found", room).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let room = lock_room(&room_arc)?;
+            let user_info = match room.users.get(username) {
+                Some(info) => info,
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Your user info is missing in this room".red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let mut client = lock_client(&client)?;
+            let joined_at = match &client.state {
+                ClientState::InRoom { room_time: Some(t), .. } => *t,
+                _ => {
+                    writeln!(client.stream, "{}", "Error: Could not determine join time".red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let duration = joined_at.elapsed().map_err(|e| {
+                io::Error::new(io::ErrorKind::Other, format!("Time error: {e}"))
+            })?;
+            let mins = duration.as_secs() / 60;
+            let secs = duration.as_secs() % 60;
+
+            writeln!(client.stream, "{}", format!(
+                "Status for '{}':\nColor: {}\nRole: {}\nTime in room: {}m {}s",
+                username,
+                if user_info.color.is_empty() { "#FFFFFF" } else { &user_info.color },
+                &user_info.role,
+                mins, secs
+            ).green())?;
+            Ok(CommandResult::Handled)
+        }
+
         Command::AccountRegister { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Already logged in".yellow())?;

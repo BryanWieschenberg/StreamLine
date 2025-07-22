@@ -9,7 +9,7 @@ use serde::Deserialize;
 pub enum ClientState {
     Guest,
     LoggedIn {username: String},
-    InRoom {username: String, room: String}
+    InRoom {username: String, room: String, room_time: Option<std::time::SystemTime>},
 }
 
 pub struct Client {

@@ -6,7 +6,8 @@ pub enum Command {
     Ping,
     Quit,
     Leave,
-
+    Status,
+    
     Account,
     AccountRegister { username: String, password: String, confirm: String },
     AccountLogin { username: String, password: String },
@@ -35,6 +36,7 @@ pub fn parse_command(input: &str) -> Command {
         ["ping"] => Command::Ping,
         ["quit"] | ["exit"] | ["q"] | ["e"] => Command::Quit,
         ["leave"] => Command::Leave,
+        ["status"] => Command::Status,
 
         ["account", "register", username, password, confirm_password] |
         ["a", "register", username, password, confirm_password] |
