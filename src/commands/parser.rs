@@ -5,6 +5,7 @@ pub enum Command {
     Help,
     Ping,
     Quit,
+    Leave,
 
     Account,
     AccountRegister { username: String, password: String, confirm: String },
@@ -19,7 +20,8 @@ pub enum Command {
     RoomList,
     RoomCreate { name: String, whitelist: bool },
     RoomJoin { name: String },
-    
+    RoomImport { filename: String },
+    RoomDelete { name: String, force: bool },
     InvalidSyntax { err_msg: String },
     Unavailable
 }
@@ -32,6 +34,7 @@ pub fn parse_command(input: &str) -> Command {
         ["help"] | ["h"] => Command::Help,
         ["ping"] => Command::Ping,
         ["quit"] | ["exit"] | ["q"] | ["e"] => Command::Quit,
+        ["leave"] => Command::Leave,
 
         ["account", "register", username, password, confirm_password] |
         ["a", "register", username, password, confirm_password] |
@@ -212,6 +215,45 @@ pub fn parse_command(input: &str) -> Command {
         ["room", "j", ..] |
         ["r", "j", ..] => {
             let err_msg = format!("{}", "Usage: /room join <room name>".yellow());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["room", "import", filename] |
+        ["r", "import", filename] => Command::RoomImport {
+            filename: filename.to_string()
+        },
+
+        ["room", "import", ..] |
+        ["r", "import", ..] => {
+            let err_msg = format!("{}", "Usage: /room import <filename>".yellow());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["room", "delete", name] |
+        ["r", "delete", name] | 
+        ["room", "d", name] |
+        ["r", "d", name] => Command::RoomDelete{
+            name: name.to_string(),
+            force: false
+        },
+
+        ["room", "delete", "force", name] |
+        ["r", "delete", "force", name] |
+        ["room", "d", "force", name] |
+        ["room", "delete", "f", name] |
+        ["r", "d", "force", name] |
+        ["r", "delete", "f", name] |
+        ["room", "d", "f", name] |
+        ["r", "d", "f", name] => Command::RoomDelete {
+            name: name.to_string(),
+            force: true
+        },
+
+        ["room", "delete", ..] |
+        ["r", "delete", ..] |
+        ["room", "d", ..] |
+        ["r", "d", ..] => {
+            let err_msg = format!("{}", "Usage: /room delete <room name> or /room delete <room name> force".yellow());
             Command::InvalidSyntax { err_msg }
         },
 

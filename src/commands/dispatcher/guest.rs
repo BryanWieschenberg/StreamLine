@@ -44,6 +44,12 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             Ok(CommandResult::Stop)
         }
 
+        Command::Leave => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "You must be in a room to leave the room".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
         Command::AccountRegister {username, password, confirm} => {
             if password != confirm {
                 let mut client = lock_client(&client)?;
@@ -245,6 +251,18 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
         Command::RoomJoin { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Must log in to join a room".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomImport { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must log in to import a room".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomDelete { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must log in to delete a room".yellow())?;
             Ok(CommandResult::Handled)
         }
 

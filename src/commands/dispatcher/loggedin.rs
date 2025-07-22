@@ -9,7 +9,7 @@ use colored::*;
 use crate::commands::parser::Command;
 use crate::commands::command_utils::{help_msg_loggedin, generate_hash};
 use crate::state::types::{Client, Clients, ClientState, Room, Rooms, RoomUser};
-use crate::utils::{lock_client, lock_clients, lock_users_storage, lock_rooms, lock_rooms_storage};
+use crate::utils::{lock_client, lock_clients, lock_users_storage, lock_rooms, lock_room, lock_rooms_storage};
 use super::CommandResult;
 
 pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String) -> io::Result<CommandResult> {
@@ -42,6 +42,12 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             writeln!(client.stream, "{}", "Exiting...".green())?;
             client.stream.shutdown(std::net::Shutdown::Both)?;
             Ok(CommandResult::Stop)
+        }
+
+        Command::Leave => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "You must be in a room to leave the room".yellow())?;
+            Ok(CommandResult::Handled)
         }
 
         Command::AccountRegister { .. } => {
@@ -411,12 +417,30 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             let mut ser = Serializer::with_formatter(&mut writer, formatter);
             rooms_json.serialize(&mut ser)?;
 
+            let roles = match serde_json::from_value(new_room["roles"].clone()) {
+                Ok(val) => val,
+                Err(e) => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Error parsing roles: {e}").red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let users = match serde_json::from_value(new_room["users"].clone()) {
+                Ok(val) => val,
+                Err(e) => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Error parsing users: {e}").red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
             let room_obj = Room {
                 whitelist_enabled: whitelist,
                 whitelist: if whitelist { vec![username.clone()] } else { vec![] },
-                roles: serde_json::from_value(new_room["roles"].clone()).unwrap(),
-                users: serde_json::from_value(new_room["users"].clone()).unwrap(),
-                online_users: Vec::new()
+                roles,
+                users,
+                online_users: Vec::new(),
             };
 
             {
@@ -505,6 +529,162 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             };
 
             writeln!(client.stream, "{}", format!("Joined room: {}", name).green())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomImport { filename } => {
+            let safe_filename = if !filename.ends_with(".json") {
+                format!("{}.json", filename)
+            } else {
+                filename
+            };
+
+            let import_path = format!("data/logs/rooms/{}", safe_filename);
+            let import_file = match File::open(&import_path) {
+                Ok(file) => file,
+                Err(_) => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Error: Could not open '{}'", import_path).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let import_reader = BufReader::new(import_file);
+            let import_data: Value = match serde_json::from_reader(import_reader) {
+                Ok(data) => data,
+                Err(_) => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Invalid JSON format in import file".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let (room_name, room_value) = match import_data.as_object().and_then(|obj| obj.iter().next()) {
+                Some((name, val)) => (name.clone(), val.clone()),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Import file is empty or malformed".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let _lock = lock_rooms_storage()?;
+
+            let file = File::open("data/rooms.json")?;
+            let reader = BufReader::new(file);
+            let mut rooms_json: Value = serde_json::from_reader(reader)?;
+
+            if rooms_json.get(&room_name).is_some() {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("Error: Room {} already exists", room_name).yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            rooms_json[&room_name] = room_value.clone();
+            let file = OpenOptions::new()
+                .write(true)
+                .truncate(true)
+                .open("data/rooms.json")?;
+            let mut writer = std::io::BufWriter::new(file);
+            let formatter = PrettyFormatter::with_indent(b"    ");
+            let mut ser = Serializer::with_formatter(&mut writer, formatter);
+            rooms_json.serialize(&mut ser)?;
+
+            let room_obj: Room = match serde_json::from_value(room_value) {
+                Ok(room) => room,
+                Err(e) => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Error: Failed to parse room data: {e}").red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            {
+                let mut rooms = lock_rooms(rooms)?;
+                rooms.insert(room_name.clone(), Arc::new(Mutex::new(Room {
+                    online_users: vec![],
+                    ..room_obj
+                })));
+            }
+
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", format!("Imported room: {}", room_name).green())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomDelete { name, force } => {
+            let _lock = lock_rooms_storage()?;
+            let mut rooms = lock_rooms(rooms)?;
+
+            let room_arc = match rooms.get(&name) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    writeln!(lock_client(&client)?.stream, "{}", format!("Error: Room {} not found", name).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            {
+                let room = lock_room(&room_arc)?;
+                match room.users.get(username) {
+                    Some(user) if user.role == "owner" => (),
+                    _ => {
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", "Error: Only the room owner can delete this room".yellow())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                }
+            }
+
+            if !force {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("Are you sure you want to delete room {}? (y/n): ", name).red())?;
+
+                let mut reader = BufReader::new(client.stream.try_clone()?);
+                loop {
+                    let mut line = String::new();
+                    let bytes_read = reader.read_line(&mut line)?;
+                    if bytes_read == 0 {
+                        writeln!(client.stream, "{}", "Connection closed".yellow())?;
+                        return Ok(CommandResult::Stop);
+                    }
+
+                    match line.trim().to_lowercase().as_str() {
+                        "y" => break,
+                        "n" => {
+                            writeln!(client.stream, "{}", "Room deletion cancelled".yellow())?;
+                            return Ok(CommandResult::Handled);
+                        }
+                        _ => {
+                            writeln!(client.stream, "{}", "(y/n): ".red())?;
+                        }
+                    }
+                }
+            }
+
+            rooms.remove(&name);
+
+            let file = File::open("data/rooms.json")?;
+            let reader = BufReader::new(file);
+            let mut rooms_json: Value = serde_json::from_reader(reader)?;
+
+            if rooms_json.get(&name).is_some() {
+                if let Some(map) = rooms_json.as_object_mut() {
+                    map.remove(&name);
+                } else {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Malformed rooms.json".red())?;
+                    return Ok(CommandResult::Handled);
+                }
+                let file = OpenOptions::new().write(true).truncate(true).open("data/rooms.json")?;
+                let mut writer = std::io::BufWriter::new(file);
+                let formatter = PrettyFormatter::with_indent(b"    ");
+                let mut ser = Serializer::with_formatter(&mut writer, formatter);
+                rooms_json.serialize(&mut ser)?;
+            }
+
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", format!("Room {} deleted successfully", name).green())?;
             Ok(CommandResult::Handled)
         }
 

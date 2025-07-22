@@ -4,7 +4,7 @@ use colored::*;
 
 use crate::commands::parser::Command;
 use crate::commands::command_utils::help_msg_inroom;
-use crate::state::types::{Client, Clients, Rooms};
+use crate::state::types::{Client, Clients, ClientState, Rooms};
 use crate::utils::{lock_client, lock_clients, lock_rooms};
 use super::CommandResult;
 
@@ -49,6 +49,25 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Stop)
         }
 
+        Command::Leave => {
+            {
+                let rooms_map = lock_rooms(rooms)?;
+                if let Some(room_arc) = rooms_map.get(room) {
+                    if let Ok(mut room) = room_arc.lock() {
+                        room.online_users.retain(|u| u != username);
+                    }
+                }
+            }
+
+            let mut client = lock_client(&client)?;
+            client.state = ClientState::LoggedIn {
+                username: username.clone()
+            };
+
+            writeln!(client.stream, "{}", format!("You have left {}", room).green())?;
+            Ok(CommandResult::Handled)
+        }
+        
         Command::AccountRegister { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Already logged in".yellow())?;
@@ -118,6 +137,18 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         Command::RoomJoin { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Must be in the lobby to join a room".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomImport { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must be in the lobby to import a room".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::RoomDelete { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Must log in to delete a room".yellow())?;
             Ok(CommandResult::Handled)
         }
 

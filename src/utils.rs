@@ -26,7 +26,6 @@ pub fn lock_rooms(rooms: &Rooms) -> std::io::Result<std::sync::MutexGuard<'_, Ha
     })
 }
 
-#[allow(dead_code)]
 pub fn lock_room(room_arc: &Arc<Mutex<Room>>) -> std::io::Result<std::sync::MutexGuard<'_, Room>> {
     room_arc.lock().map_err(|e| {
         eprintln!("Failed to lock room: {e}");
