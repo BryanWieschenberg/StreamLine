@@ -35,12 +35,7 @@ fn main() -> std::io::Result<()> {
         or see a list of rooms with /room\n
         For a list of all available commands, type /help
     ".bright_blue());
-    
-    let mut username = String::new();
-    io::stdin().read_line(&mut username)?;
-    stream.write_all(username.trim().as_bytes())?;
-    stream.write_all(b"\n")?;
-    
+        
     // Spawn a thread to handle receiving messages from the server
     thread::spawn(move || handle_recv(stream_clone));
 

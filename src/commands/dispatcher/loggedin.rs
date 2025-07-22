@@ -17,8 +17,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
     match cmd {
         Command::Help => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}{}", help_msg_loggedin().green(), "\x1b[0m")?;
-            io::stdout().flush()?;
+            writeln!(client.stream, "{}{}", help_msg_loggedin().bright_blue(), "\x1b[0m")?;
             Ok(CommandResult::Handled)
         }
 
@@ -175,7 +174,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 Ok(file) => file,
                 Err(_) => {
                     let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", format!("Error: Could not open '{}'", import_path).yellow())?;
+                    writeln!(client.stream, "{}", format!("Error: Could not open {}", import_path).yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             };
@@ -207,7 +206,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
 
             if users.get(&username).is_some() {
                 let mut client = lock_client(&client)?;
-                writeln!(client.stream, "{}", format!("Error: User '{}' already exists", username).yellow())?;
+                writeln!(client.stream, "{}", format!("Error: User {} already exists", username).yellow())?;
                 return Ok(CommandResult::Handled);
             }
 
@@ -391,8 +390,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 "whitelist_enabled": whitelist,
                 "whitelist": if whitelist { vec![username.clone()] } else { Vec::<String>::new() },
                 "roles": {
-                    "moderator": ["afk", "uptime", "sendfile", "msg", "me", "super.users", "user", "log", "mod"],
-                    "user": ["afk", "uptime", "sendfile", "msg", "me", "user", "log"],
+                    "moderator": ["afk", "send", "msg", "me", "super.users", "user", "log", "mod"],
+                    "user": ["afk", "send", "msg", "me", "user", "log"],
                     "colors": {}
                 },
                 "users": {
@@ -457,10 +456,10 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
 
             let mut client = lock_client(&client)?;
             if whitelist {
-                writeln!(client.stream, "{}", format!("Whitelisted room '{}' created successfully", name).green())?;
+                writeln!(client.stream, "{}", format!("Whitelisted room {} created successfully", name).green())?;
             }
             else {
-                writeln!(client.stream, "{}", format!("Room '{}' created successfully", name).green())?;                
+                writeln!(client.stream, "{}", format!("Room {} created successfully", name).green())?;                
             }
             Ok(CommandResult::Handled)
         }
@@ -472,7 +471,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             let room_arc = match rooms.get(&name) {
                 Some(r) => Arc::clone(r),
                 None => {
-                    writeln!(lock_client(&client)?.stream, "{}", format!("Room '{}' not found", name).yellow())?;
+                    writeln!(lock_client(&client)?.stream, "{}", format!("Room {} not found", name).yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             };
@@ -552,7 +551,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 Ok(file) => file,
                 Err(_) => {
                     let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", format!("Error: Could not open '{}'", import_path).yellow())?;
+                    writeln!(client.stream, "{}", format!("Error: Could not open {}", import_path).yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             };

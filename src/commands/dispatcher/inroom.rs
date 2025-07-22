@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::help_msg_inroom;
+use crate::commands::command_utils::{help_msg_inroom, ColorizeExt};
 use crate::state::types::{Client, Clients, ClientState, Rooms};
 use crate::utils::{lock_client, lock_clients, lock_room, lock_rooms};
 use super::CommandResult;
@@ -11,9 +11,34 @@ use super::CommandResult;
 pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, room: &String) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(arc) => arc,
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Room not found".red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let room_guard = lock_room(&room_arc)?;
+
+            let role = match room_guard.users.get(username) {
+                Some(u) => u.role.as_str(),
+                None => "user",
+            };
+
+            let role_cmds: Vec<&str> = match role {
+                "moderator" => room_guard.roles.moderator.iter().map(|s| s.as_str()).collect(),
+                "user" => room_guard.roles.user.iter().map(|s| s.as_str()).collect(),
+                "admin" | "owner" => vec![
+                    "afk", "send", "msg", "me", "super", "user", "log", "mod"
+                ],
+                _ => Vec::new(),
+            };
+
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}{}", help_msg_inroom().green(), "\x1b[0m")?;
-            io::stdout().flush()?;
+            writeln!(client.stream, "{}", help_msg_inroom(role_cmds).bright_blue())?;
             Ok(CommandResult::Handled)
         }
 
@@ -74,7 +99,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 Some(r) => Arc::clone(r),
                 None => {
                     let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", format!("Room '{}' not found", room).yellow())?;
+                    writeln!(client.stream, "{}", format!("Room {} not found", room).yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             };
@@ -101,16 +126,31 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             let duration = joined_at.elapsed().map_err(|e| {
                 io::Error::new(io::ErrorKind::Other, format!("Time error: {e}"))
             })?;
-            let mins = duration.as_secs() / 60;
             let secs = duration.as_secs() % 60;
+            let mins = duration.as_secs() / 60;
+            let hrs = mins / 60;
 
-            writeln!(client.stream, "{}", format!(
-                "Status for '{}':\nColor: {}\nRole: {}\nTime in room: {}m {}s",
-                username,
-                if user_info.color.is_empty() { "#FFFFFF" } else { &user_info.color },
-                &user_info.role,
-                mins, secs
-            ).green())?;
+            let role = {
+                let mut c = user_info.role.chars();
+                match c.next() {
+                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                    None => String::new(),
+                }
+            };
+            let color_display = if user_info.color.is_empty() {
+                "Default".italic().to_string()
+            }
+            else {
+                format!("{}", user_info.color).truecolor_from_hex(&user_info.color).to_string()
+            };
+
+            writeln!(client.stream, "{}\n{} {}\n{} {}\n{} {}\n{} {}",
+                format!("Status for {}:", username).green(),
+                "> Role:".green(), role,
+                "> Nickname:".green(), if user_info.nick.is_empty() { "None".italic().to_string() } else { user_info.nick.clone() },
+                "> Color:".green(), color_display,
+                "> Session:".green(), format!("{:0>2}:{:0>2}:{:0>2}", hrs, mins, secs)
+            )?;
             Ok(CommandResult::Handled)
         }
 

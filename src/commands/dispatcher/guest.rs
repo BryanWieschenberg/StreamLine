@@ -16,8 +16,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
     match cmd {
         Command::Help => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}{}", help_msg_guest().green(), "\x1b[0m")?;
-            io::stdout().flush()?;
+            writeln!(client.stream, "{}{}", help_msg_guest().bright_blue(), "\x1b[0m")?;
             Ok(CommandResult::Handled)
         }
 
@@ -102,7 +101,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
         Command::AccountLogin {username, password} => {
             if is_user_logged_in(clients, &username) {
                 let mut client = lock_client(&client)?;
-                writeln!(client.stream, "{}", "Error: User is already logged in".yellow())?;
+                writeln!(client.stream, "{}", format!("Error: {} is already logged in", username).yellow())?;
                 return Ok(CommandResult::Handled);
             }
 
@@ -171,7 +170,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
                 Ok(file) => file,
                 Err(_) => {
                     let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", format!("Error: Could not open '{}'", import_path).yellow())?;
+                    writeln!(client.stream, "{}", format!("Error: Could not open {}", import_path).yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             };
@@ -203,7 +202,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
 
             if users.get(&username).is_some() {
                 let mut client = lock_client(&client)?;
-                writeln!(client.stream, "{}", format!("Error: User '{}' already exists", username).yellow())?;
+                writeln!(client.stream, "{}", format!("Error: User {} already exists", username).yellow())?;
                 return Ok(CommandResult::Handled);
             }
 

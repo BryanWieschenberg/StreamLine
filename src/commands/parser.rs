@@ -7,7 +7,7 @@ pub enum Command {
     Quit,
     Leave,
     Status,
-    
+
     Account,
     AccountRegister { username: String, password: String, confirm: String },
     AccountLogin { username: String, password: String },
@@ -51,7 +51,7 @@ pub fn parse_command(input: &str) -> Command {
         ["a", "register", ..] |
         ["account", "r", ..] |
         ["a", "r", ..] => {
-            let err_msg = format!("{}", "Usage: /account register <username> <password> <password confirm>".yellow());
+            let err_msg = format!("{}", "Usage: /account register <username> <password> <password confirm>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -67,7 +67,7 @@ pub fn parse_command(input: &str) -> Command {
         ["a", "login", ..] |
         ["account", "l", ..] |
         ["a", "l", ..] => {
-            let err_msg = format!("{}", "Usage: /account login <username> <password>".yellow());
+            let err_msg = format!("{}", "Usage: /account login <username> <password>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -76,7 +76,7 @@ pub fn parse_command(input: &str) -> Command {
 
         ["account", "logout", ..] |
         ["a", "logout", ..] => {
-            let err_msg = format!("{}", "Usage: /account logout".yellow());
+            let err_msg = format!("{}", "Usage: /account logout".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -107,7 +107,7 @@ pub fn parse_command(input: &str) -> Command {
         ["a", "edit", ..] |
         ["account", "e", ..] |
         ["a", "e", ..] => {
-            let err_msg = format!("{}", "Usage: /account edit username <new username> or /account edit password <current password> <new password>".yellow());
+            let err_msg = format!("{}", "Usage: /account edit username <new username> or /account edit password <current password> <new password>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -118,7 +118,7 @@ pub fn parse_command(input: &str) -> Command {
 
         ["account", "import", ..] |
         ["a", "import", ..] => {
-            let err_msg = format!("{}", "Usage: /account import <filename>".yellow());
+            let err_msg = format!("{}", "Usage: /account import <filename>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -134,7 +134,7 @@ pub fn parse_command(input: &str) -> Command {
 
         ["account", "export", ..] |
         ["a", "export", ..] => {
-            let err_msg = format!("{}", "Usage: /account export or /account export <filename>".yellow());
+            let err_msg = format!("{}", "Usage: /account export or /account export <filename>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -156,16 +156,26 @@ pub fn parse_command(input: &str) -> Command {
         ["a", "delete", ..] |
         ["account", "d", ..] |
         ["a", "d", ..] => {
-            let err_msg = format!("{}", "Usage: /account delete or /account delete force".yellow());
+            let err_msg = format!("{}", "Usage: /account delete or /account delete force".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
-        ["account"] |
-        ["a"] => Command::Account,
+        ["account", "info"] |
+        ["a", "info"] |
+        ["account", "i"] |
+        ["a", "i"] => Command::Account,
+
+        ["account", "info", ..] |
+        ["a", "info", ..] |
+        ["account", "i", ..] |
+        ["a", "i", ..] => {
+            let err_msg = format!("{}", "Usage: /account info".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        }
 
         ["account", ..] |
         ["a", ..] => {
-            let err_msg = format!("{}", "Usage:\n> /account\n> /account register <username> <password> <password confirm>\n> /account login <username> <password>\n> /account logout\n> /account edit username <new username> or /account edit password <current password> <new password>\n> /account import <filename>\n> /account export or /account export <filename>\n> /account delete or /account delete force".yellow());
+            let err_msg = format!("{}", "Account commands:\n> /account info\n> /account register <username> <password> <password confirm>\n> /account login <username> <password>\n> /account logout\n> /account edit username <new username> or /account edit password <current password> <new password>\n> /account import <filename>\n> /account export or /account export <filename>\n> /account delete or /account delete force".bright_blue());
             Command::InvalidSyntax { err_msg }
         }
 
@@ -201,7 +211,7 @@ pub fn parse_command(input: &str) -> Command {
         ["r", "create", ..] |
         ["room", "c", ..] |
         ["r", "c", ..] => {
-            let err_msg = format!("{}", "Usage: /room create <room name> or /room create <room name> whitelist".yellow());
+            let err_msg = format!("{}", "Usage: /room create <room name> or /room create <room name> whitelist".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -216,7 +226,7 @@ pub fn parse_command(input: &str) -> Command {
         ["r", "join", ..] |
         ["room", "j", ..] |
         ["r", "j", ..] => {
-            let err_msg = format!("{}", "Usage: /room join <room name>".yellow());
+            let err_msg = format!("{}", "Usage: /room join <room name>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -227,7 +237,7 @@ pub fn parse_command(input: &str) -> Command {
 
         ["room", "import", ..] |
         ["r", "import", ..] => {
-            let err_msg = format!("{}", "Usage: /room import <filename>".yellow());
+            let err_msg = format!("{}", "Usage: /room import <filename>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -255,16 +265,26 @@ pub fn parse_command(input: &str) -> Command {
         ["r", "delete", ..] |
         ["room", "d", ..] |
         ["r", "d", ..] => {
-            let err_msg = format!("{}", "Usage: /room delete <room name> or /room delete <room name> force".yellow());
+            let err_msg = format!("{}", "Usage: /room delete <room name> or /room delete <room name> force".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
-        ["room"] |
-        ["r"] => Command::RoomList,
+        ["room", "list"] |
+        ["r", "list"] |
+        ["room", "l"] |
+        ["r", "l"] => Command::RoomList,
+
+        ["room", "list", ..] |
+        ["r", "list", ..] |
+        ["room", "l", ..] |
+        ["r", "l", ..] => {
+            let err_msg = format!("{}", "Usage: /room list".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
 
         ["room", ..] |
         ["r", ..] => {
-            let err_msg = format!("{}", "Usage:\n> /room\n> /room create <room name> or /room create <room name> whitelist\n> /room join <room name>\n> /room import <filename>\n> /room delete <room name> or /room delete <room name> force".yellow());
+            let err_msg = format!("{}", "Room commands:\n> /room list\n> /room create <room name> or /room create <room name> whitelist\n> /room join <room name>\n> /room import <filename>\n> /room delete <room name> or /room delete <room name> force".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 

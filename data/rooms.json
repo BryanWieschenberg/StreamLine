@@ -8,8 +8,7 @@
             },
             "moderator": [
                 "afk",
-                "uptime",
-                "sendfile",
+                "send",
                 "msg",
                 "me",
                 "super.users",
@@ -19,8 +18,7 @@
             ],
             "user": [
                 "afk",
-                "uptime",
-                "sendfile",
+                "send",
                 "msg",
                 "me",
                 "user",
@@ -38,11 +36,11 @@
             },
             "bryan": {
                 "banned": "",
-                "color": "",
+                "color": "#0080FF",
                 "hidden": false,
                 "muted": "",
                 "nick": "",
-                "role": "user"
+                "role": "moderator"
             },
             "jeff": {
                 "banned": "",
@@ -77,8 +75,7 @@
             "colors": {},
             "moderator": [
                 "afk",
-                "uptime",
-                "sendfile",
+                "send",
                 "msg",
                 "me",
                 "super.users",
@@ -88,8 +85,7 @@
             ],
             "user": [
                 "afk",
-                "uptime",
-                "sendfile",
+                "send",
                 "msg",
                 "me",
                 "user",
@@ -114,8 +110,7 @@
             "colors": {},
             "moderator": [
                 "afk",
-                "uptime",
-                "sendfile",
+                "send",
                 "msg",
                 "me",
                 "super.users",
@@ -125,8 +120,7 @@
             ],
             "user": [
                 "afk",
-                "uptime",
-                "sendfile",
+                "send",
                 "msg",
                 "me",
                 "user",
@@ -159,8 +153,7 @@
             "colors": {},
             "moderator": [
                 "afk",
-                "uptime",
-                "sendfile",
+                "send",
                 "msg",
                 "me",
                 "super.users",
@@ -170,8 +163,7 @@
             ],
             "user": [
                 "afk",
-                "uptime",
-                "sendfile",
+                "send",
                 "msg",
                 "me",
                 "user",
