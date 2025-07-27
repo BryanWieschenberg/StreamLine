@@ -3,12 +3,16 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::{help_msg_inroom, ColorizeExt};
+use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission};
 use crate::state::types::{Client, Clients, ClientState, Rooms};
 use crate::utils::{lock_client, lock_clients, lock_room, lock_rooms};
 use super::CommandResult;
 
 pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, room: &String) -> io::Result<CommandResult> {
+    if !has_permission(&cmd, client.clone(), rooms, username, room)? {
+        return Ok(CommandResult::Handled);
+    }
+
     match cmd {
         Command::Help => {
             let rooms_map = lock_rooms(rooms)?;

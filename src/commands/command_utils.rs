@@ -3,36 +3,52 @@ use once_cell::sync::Lazy;
 use sha2::{Sha256, Digest};
 use crate::state::types::{Clients, ClientState};
 use colored::Colorize;
+use crate::state::types::Roles;
+use crate::commands::parser::Command;
+use crate::state::types::{Client, Rooms};
+use crate::utils::{lock_client, lock_room, lock_rooms};
+use std::io::{self, Write};
+use std::sync::{Arc, Mutex};
 
 pub static DESCRIPTIONS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
-    let mut map = HashMap::new();
-    map.insert("afk",             "> /afk                Set yourself as away");
-    map.insert("send",            "> /send <file> <user> Send a file to the room");
-    map.insert("msg",             "> /msg <user> <msg>   Send a private message");
-    map.insert("me",              "> /me <msg>           Send an emote message");
-    map.insert("super",           "> /super              Administrator commands");
-    map.insert("super.users",     "> /super users        Show all room user data");
-    map.insert("super.reset",     "> /super reset        Reset room back to default");
-    map.insert("super.rename",    "> /super rename       Changes room name");
-    map.insert("super.export",    "> /super export       Saves room data");
-    map.insert("super.whitelist", "> /super whitelist    Manage room whitelist");
-    map.insert("super.limit",     "> /super limit        Manage room rate limits");
-    map.insert("super.roles",     "> /super roles        Manage room roles and permissions");
-    map.insert("user",            "> /user               Manage user settings");
-    map.insert("user.list",       "> /user list          Show all visible room users");
-    map.insert("user.rename",     "> /user rename        Changes your name in the room");
-    map.insert("user.recolor",    "> /user recolor       Changes your name color in the room");
-    map.insert("user.ignore",     "> /user ignore        Stops messages from certain users");
-    map.insert("user.hide",       "> /user hide          Hides you from /user list");
-    map.insert("log",             "> /log                Manage chat logs");
-    map.insert("log.list",        "> /log list           Show all available chat logs");
-    map.insert("log.save",        "> /log save           Saves chat log of current room session's messages");
-    map.insert("log.view",        "> /log view           Updates room session with chat log messages");
-    map.insert("mod",             "> /mod                Use chat moderation tools");
-    map.insert("mod.kick",        "> /mod kick           Kick users from the chat");
-    map.insert("mod.mute",        "> /mod mute           Disable certain users from speaking");
-    map.insert("mod.ban",         "> /mod ban            Disable certain users from joining");
-    map
+    HashMap::from([
+        ("afk",             "> /afk                Set yourself as away"),
+        ("send",            "> /send <file> <user> Send a file to the room"),
+        ("msg",             "> /msg <user> <msg>   Send a private message"),
+        ("me",              "> /me <msg>           Send an emote message"),
+        ("super",           "> /super              Administrator commands"),
+        ("super.users",     "> /super users        Show all room user data"),
+        ("super.reset",     "> /super reset        Reset room back to default"),
+        ("super.rename",    "> /super rename       Changes room name"),
+        ("super.export",    "> /super export       Saves room data"),
+        ("super.whitelist", "> /super whitelist    Manage room whitelist"),
+        ("super.limit",     "> /super limit        Manage room rate limits"),
+        ("super.roles",     "> /super roles        Manage room roles and permissions"),
+        ("user",            "> /user               Manage user settings"),
+        ("user.list",       "> /user list          Show all visible room users"),
+        ("user.rename",     "> /user rename        Changes your name in the room"),
+        ("user.recolor",    "> /user recolor       Changes your name color in the room"),
+        ("user.ignore",     "> /user ignore        Stops messages from certain users"),
+        ("user.hide",       "> /user hide          Hides you from /user list"),
+        ("log",             "> /log                Manage chat logs"),
+        ("log.list",        "> /log list           Show all available chat logs"),
+        ("log.save",        "> /log save           Saves chat log of current room session's messages"),
+        ("log.view",        "> /log view           Updates room session with chat log messages"),
+        ("mod",             "> /mod                Use chat moderation tools"),
+        ("mod.kick",        "> /mod kick           Kick users from the chat"),
+        ("mod.mute",        "> /mod mute           Disable certain users from speaking"),
+        ("mod.ban",         "> /mod ban            Disable certain users from joining")
+    ])
+});
+
+pub static RESTRICTED_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    HashSet::from([
+        "afk", "send", "msg", "me",
+        "super", "super.users", "super.reset", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
+        "user", "user.list", "user.rename", "user.recolor", "user.ignore", "user.hide",
+        "log", "log.list", "log.save", "log.view",
+        "mod", "mod.kick", "mod.ban", "mod.mute",
+    ])
 });
 
 pub fn command_order() -> Vec<&'static str> {
@@ -78,12 +94,8 @@ r#"Available commands:
 }
 
 pub fn help_msg_inroom(extra_cmds: Vec<&str>) -> String {
-    let mut shown_cmds: HashSet<String> = HashSet::new();
-    let descriptions = DESCRIPTIONS.clone();
-
-    for cmd in extra_cmds {
-        shown_cmds.insert(cmd.to_string());
-    }
+    let shown_cmds: HashSet<String> = extra_cmds.into_iter().map(|s| s.to_string()).collect();
+    let descriptions = &*DESCRIPTIONS;
 
     let mut ordered_filtered = always_visible().into_iter().map(String::from).collect::<Vec<_>>();
 
@@ -136,4 +148,44 @@ pub fn is_user_logged_in(clients: &Clients, username: &str) -> bool {
         }
     }
     false
+}
+
+pub fn check_role_permissions(role: &str, command: &str, roles: &Roles) -> bool {
+    match role {
+        "owner" | "admin" => true, // full access
+        "moderator" => roles.moderator.iter().any(|c| c == command),
+        "user" => roles.user.iter().any(|c| c == command),
+        _ => false,
+    }
+}
+
+pub fn has_permission(cmd: &Command, client: Arc<Mutex<Client>>, rooms: &Rooms, username: &String, room: &String) -> io::Result<bool> {
+    let cmd_str = cmd.to_string();
+
+    if cmd_str.is_empty() || !RESTRICTED_COMMANDS.contains(cmd_str.as_str()) {
+        return Ok(true)
+    }
+
+    let rooms_map = lock_rooms(rooms)?;
+    let room_arc = match rooms_map.get(room) {
+        Some(r) => Arc::clone(r),
+        None => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", format!("Room {} not found", room).yellow())?;
+            return Ok(false)
+        }
+    };
+
+    let room_guard = lock_room(&room_arc)?;
+    let role = room_guard.users.get(username)
+        .map(|u| u.role.as_str())
+        .unwrap_or("user");
+
+    if !check_role_permissions(role, cmd_str.as_str(), &room_guard.roles) {
+        let mut client = lock_client(&client)?;
+        writeln!(client.stream, "{}", "You don't have permission to run this command".red())?;
+        return Ok(false)
+    }
+
+    return Ok(true)
 }

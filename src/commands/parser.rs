@@ -1,5 +1,36 @@
 use colored::*;
 
+impl ToString for Command {
+    fn to_string(&self) -> String {
+        match self {
+            Command::Help |
+            Command::Ping |
+            Command::Quit |
+            Command::Leave |
+            Command::Status => "",
+            Command::DM { .. } => "msg",
+            
+            Command::Account |
+            Command::AccountRegister { .. } |
+            Command::AccountLogin { .. } |
+            Command::AccountLogout |
+            Command::AccountEditUsername { .. } |
+            Command::AccountEditPassword { .. } |
+            Command::AccountImport { .. } |
+            Command::AccountExport { .. } |
+            Command::AccountDelete { .. } => "",
+            
+            Command::RoomList |
+            Command::RoomCreate { .. } |
+            Command::RoomJoin { .. } |
+            Command::RoomImport { .. } |
+            Command::RoomDelete { .. } => "",
+
+            Command::InvalidSyntax { .. } | Command::Unavailable => ""
+        }.to_string()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Command {
     Help,
