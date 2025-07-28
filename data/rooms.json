@@ -19,12 +19,21 @@
             "user": [
                 "afk",
                 "send",
+                "msg",
                 "me",
                 "user",
                 "log"
             ]
         },
         "users": {
+            "balls": {
+                "banned": "",
+                "color": "",
+                "hidden": false,
+                "muted": "",
+                "nick": "",
+                "role": "user"
+            },
             "bryan": {
                 "banned": "",
                 "color": "#0080FF",
@@ -75,6 +84,14 @@
                 "muted": "",
                 "nick": "",
                 "role": "owner"
+            },
+            "jeff": {
+                "banned": "",
+                "color": "",
+                "hidden": false,
+                "muted": "",
+                "nick": "",
+                "role": "user"
             }
         },
         "whitelist": [],

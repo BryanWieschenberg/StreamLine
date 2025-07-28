@@ -43,21 +43,13 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             Ok(CommandResult::Stop)
         }
 
-        Command::Leave => {
+        Command::Leave | Command::Status | Command::DM { .. } | Command::AFK | Command::Send { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
+        Command::SuperUsers | Command::SuperReset { .. } | Command::SuperRename { .. } | Command::SuperExport { .. } | Command::SuperWhitelist | Command::SuperWhitelistToggle | Command::SuperWhitelistAdd { .. } | Command::SuperWhitelistRemove { .. } | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesPerms | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
+        Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
+        Command::LogList | Command::LogSave { .. } | Command::LogLoad { .. } |
+        Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in a room to leave the room".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::Status => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in a room to see your room status".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::DM { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in a room to send direct messages".yellow())?;
+            writeln!(client.stream, "{}", "Must be in a room to perform this command".yellow())?;
             Ok(CommandResult::Handled)
         }
 
@@ -130,6 +122,9 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
                     if generate_hash(&password) == stored_hash {
                         let mut client = lock_client(&client)?;
                         client.state = ClientState::LoggedIn { username: username.clone() };
+                        client.ignore_list = user_obj.get("ignore")
+                            .and_then(|v| v.as_array())
+                            .map_or_else(Vec::new, |arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
                         writeln!(client.stream, "{}", format!("Logged in as: {}", username).green())?;
                     } else {
                         let mut client = lock_client(&client)?;

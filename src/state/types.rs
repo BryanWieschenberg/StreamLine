@@ -15,7 +15,8 @@ pub enum ClientState {
 pub struct Client {
     pub stream: TcpStream,
     pub addr: SocketAddr,
-    pub state: ClientState
+    pub state: ClientState,
+    pub ignore_list: Vec<String>
 }
 
 pub type Clients = Arc<Mutex<HashMap<SocketAddr, Arc<Mutex<Client>>>>>;

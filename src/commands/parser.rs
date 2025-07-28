@@ -3,13 +3,12 @@ use colored::*;
 impl ToString for Command {
     fn to_string(&self) -> String {
         match self {
-            Command::Help |
-            Command::Ping |
-            Command::Quit |
-            Command::Leave |
-            Command::Status => "",
+            Command::Help | Command::Ping | Command::Quit | Command::Leave | Command::Status | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } => "",
             Command::DM { .. } => "msg",
-            
+            Command::AFK => "afk",
+            Command::Send { .. } => "send",
+            Command::Me { .. } => "me",
+
             Command::Account |
             Command::AccountRegister { .. } |
             Command::AccountLogin { .. } |
@@ -26,6 +25,38 @@ impl ToString for Command {
             Command::RoomImport { .. } |
             Command::RoomDelete { .. } => "",
 
+            Command::SuperUsers => "super.users",
+            Command::SuperReset { .. } => "super.reset",
+            Command::SuperRename { .. } => "super.rename",
+            Command::SuperExport { .. } => "super.export",
+            Command::SuperWhitelist => "super.whitelist",
+            Command::SuperWhitelistToggle => "super.whitelist",
+            Command::SuperWhitelistAdd { .. } => "super.whitelist",
+            Command::SuperWhitelistRemove { .. } => "super.whitelist",
+            Command::SuperLimitRate { .. } => "super.limit",
+            Command::SuperLimitSession { .. } => "super.limit",
+            Command::SuperRoles => "super.roles",
+            Command::SuperRolesPerms => "super.roles.perms",
+            Command::SuperRolesAdd { .. } => "super.roles",
+            Command::SuperRolesRevoke { .. } => "super.roles",
+            Command::SuperRolesAssign { .. } => "super.roles",
+            Command::SuperRolesRecolor { .. } => "super.roles",
+            
+            Command::Users => "users",
+            Command::UsersRename { .. } => "users.rename",
+            Command::UsersRecolor { .. } => "users.color",
+            Command::UsersHide => "users.hide",
+
+            Command::LogList => "log.list",
+            Command::LogSave { .. } => "log.save",
+            Command::LogLoad { .. } => "log.load",
+
+            Command::ModKick { .. } => "mod.kick",
+            Command::ModMute { .. } => "mod.mute",
+            Command::ModUnmute { .. } => "mod.unmute",
+            Command::ModBan { .. } => "mod.ban",
+            Command::ModUnban { .. } => "mod.unban",
+
             Command::InvalidSyntax { .. } | Command::Unavailable => ""
         }.to_string()
     }
@@ -34,11 +65,17 @@ impl ToString for Command {
 #[derive(Debug, Clone)]
 pub enum Command {
     Help,
-    Ping,
+    Ping, //TODO:
     Quit,
     Leave,
     Status,
-    DM { recipient: String, message: String },
+    DM { recipient: String, message: String }, //TODO: <- check if ignore works for this
+    AFK, //TODO:
+    Send { recipient: String, filename: String }, //TODO: <- check if ignore works for this
+    Me { message: String }, //TODO: <- check if ignore works for this
+    IgnoreList, //TODO:
+    IgnoreAdd { username: String }, //TODO:
+    IgnoreRemove { username: String }, //TODO:
 
     Account,
     AccountRegister { username: String, password: String, confirm: String },
@@ -55,6 +92,39 @@ pub enum Command {
     RoomJoin { name: String },
     RoomImport { filename: String },
     RoomDelete { name: String, force: bool },
+
+    SuperUsers, //TODO:
+    SuperReset { force: bool }, //TODO:
+    SuperRename { name: String }, //TODO:
+    SuperExport { filename: String }, //TODO:
+    SuperWhitelist, //TODO:
+    SuperWhitelistToggle, //TODO:
+    SuperWhitelistAdd { users: String }, //TODO:
+    SuperWhitelistRemove { users: String }, //TODO:
+    SuperLimitRate { limit: u8 }, //TODO:
+    SuperLimitSession { limit: u32 }, //TODO:
+    SuperRoles, //TODO:
+    SuperRolesPerms, //TODO:
+    SuperRolesAdd { role: String, commands: String }, //TODO:
+    SuperRolesRevoke { role: String, commands: String }, //TODO:
+    SuperRolesAssign { username: String, role: String }, //TODO:
+    SuperRolesRecolor { role: String, color: String, force: bool }, //TODO:
+
+    Users, //TODO:
+    UsersRename { name: String }, //TODO:
+    UsersRecolor { color: String }, //TODO:
+    UsersHide, //TODO:
+
+    LogList, //TODO:
+    LogSave { filename: String }, //TODO:
+    LogLoad { filename: String }, //TODO:
+
+    ModKick { username: String }, //TODO:
+    ModMute { username: String, time: String }, //TODO:
+    ModUnmute { username: String }, //TODO:
+    ModBan { username: String, time: String }, //TODO:
+    ModUnban { username: String }, //TODO:
+
     InvalidSyntax { err_msg: String },
     Unavailable
 }
@@ -69,7 +139,8 @@ pub fn parse_command(input: &str) -> Command {
         ["quit"] | ["exit"] | ["q"] | ["e"] => Command::Quit,
         ["leave"] => Command::Leave,
         ["status"] => Command::Status,
-        
+        ["afk"] => Command::AFK,
+
         ["message", recipient, message @ ..] |
         ["msg", recipient, message @ ..] |
         ["dm", recipient, message @ ..] if !message.is_empty() => Command::DM {
@@ -79,8 +150,18 @@ pub fn parse_command(input: &str) -> Command {
 
         ["message", ..] |
         ["msg", ..] |
-        ["dm", ..]=> {
+        ["dm", ..] => {
             let err_msg = format!("{}", "Usage: /message <recipient> <message>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["send", recipient, filename]  => Command::Send {
+            recipient: recipient.to_string(),
+            filename: filename.to_string()
+        },
+
+        ["send", ..] => {
+            let err_msg = format!("{}", "Usage: /send <recipient> <filename>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -331,6 +412,25 @@ pub fn parse_command(input: &str) -> Command {
         ["room", ..] |
         ["r", ..] => {
             let err_msg = format!("{}", "Room commands:\n> /room list\n> /room create <room name> or /room create <room name> whitelist\n> /room join <room name>\n> /room import <filename>\n> /room delete <room name> or /room delete <room name> force".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "users"] |
+        ["s", "users"] |
+        ["super", "u"] |
+        ["s", "u"] => Command::SuperUsers,
+
+        ["super", "users", ..] |
+        ["s", "users", ..] |
+        ["super", "u", ..] |
+        ["s", "u", ..] => {
+            let err_msg = format!("{}", "Usage: /super users".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", ..] |
+        ["s", ..] => {
+            let err_msg = format!("{}", "Super commands:\n> TODO:".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 

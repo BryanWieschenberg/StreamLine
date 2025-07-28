@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 pub static DESCRIPTIONS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     HashMap::from([
         ("afk",             "> /afk                Set yourself as away"),
-        ("send",            "> /send <file> <user> Send a file to the room"),
+        ("send",            "> /send <user> <file> Send a file to the room"),
         ("msg",             "> /msg <user> <msg>   Send a private message"),
         ("me",              "> /me <msg>           Send an emote message"),
         ("super",           "> /super              Administrator commands"),
@@ -53,7 +53,7 @@ pub static RESTRICTED_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 
 pub fn command_order() -> Vec<&'static str> {
     vec![
-        "help", "clear", "ping", "quit", "leave", "status",
+        "help", "clear", "ping", "quit", "leave", "status", "ignore",
         "afk", "send", "msg", "me",
         "super", "super.users", "super.reset", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
         "user", "user.list", "user.rename", "user.recolor", "user.ignore", "user.hide",
@@ -70,7 +70,8 @@ pub fn always_visible() -> Vec<&'static str> {
         "> /ping               Check connection to the server",
         "> /quit               Exit the application",
         "> /leave              Leave your current room",
-        "> /status             Show your current room info"
+        "> /status             Show your current room info",
+        "> /ignore             Manage ignore list"
     ]
 }
 
@@ -90,7 +91,8 @@ r#"Available commands:
 > /ping               Check connection to the server
 > /quit               Exit the application
 > /account            Manage your account
-> /room               Manage chat rooms"#
+> /room               Manage chat rooms
+> /ignore             Manage ignore list"#
 }
 
 pub fn help_msg_inroom(extra_cmds: Vec<&str>) -> String {
@@ -177,9 +179,14 @@ pub fn has_permission(cmd: &Command, client: Arc<Mutex<Client>>, rooms: &Rooms, 
     };
 
     let room_guard = lock_room(&room_arc)?;
-    let role = room_guard.users.get(username)
-        .map(|u| u.role.as_str())
-        .unwrap_or("user");
+    let role = match room_guard.users.get(username) {
+        Some(u) => u.role.as_str(),
+        None => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Error: You are not registered in this room".red())?;
+            return Ok(false);
+        }
+    };
 
     if !check_role_permissions(role, cmd_str.as_str(), &room_guard.roles) {
         let mut client = lock_client(&client)?;

@@ -190,6 +190,11 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 match &c.state {
                     ClientState::InRoom { username: uname, room: rname, .. }
                         if uname == &recipient && rname == room => {
+                            if c.ignore_list.contains(username) {
+                                found = true;
+                                break;
+                            }
+
                             writeln!(c.stream, "{}", format!("(Private) {}: {}", username, message).cyan().italic().to_string())?;
                             found = true;
                             break;
@@ -215,8 +220,88 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
+        Command::SuperUsers => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room {} not found", room).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let room_guard = lock_room(&room_arc)?;
+
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", format!("User data for room '{}':", room).green())?;
+            writeln!(client.stream, "{}", "=".repeat(50).green())?;
+
+            for (username, user_data) in &room_guard.users {
+                if room_guard.online_users.contains(username) {
+                    let role = {
+                        let mut c = user_data.role.chars();
+                        match c.next() {
+                            Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                            None => String::new(),
+                        }
+                    };
+    
+                    let color_display = if user_data.color.is_empty() {
+                        "Default".italic().to_string()
+                    }
+                    else {
+                        format!("{}", user_data.color).truecolor_from_hex(&user_data.color).to_string()
+                    };
+    
+                    let nickname = if user_data.nick.is_empty() {
+                        "None".italic().to_string()
+                    }
+                    else {
+                        user_data.nick.clone()
+                    };
+    
+                    let hidden_status = if user_data.hidden {
+                        "Hidden".yellow().to_string()
+                    }
+                    else {
+                        "Visible".green().to_string()
+                    };
+    
+                    let banned_status = if user_data.banned.is_empty() {
+                        "Not Banned".green().to_string()
+                    }
+                    else {
+                        format!("Banned ({})", user_data.banned).red().to_string()
+                    };
+    
+                    let muted_status = if user_data.muted.is_empty() {
+                        "Not Muted".green().to_string()
+                    }
+                    else {
+                        format!("Muted ({})", user_data.muted).yellow().to_string()
+                    };
+    
+                    writeln!(client.stream, "{}", format!("User: {}", username).cyan())?;
+                    writeln!(client.stream, "  > Role: {}", role)?;
+                    writeln!(client.stream, "  > Nickname: {}", nickname)?;
+                    writeln!(client.stream, "  > Color: {}", color_display)?;
+                    writeln!(client.stream, "  > Visibility: {}", hidden_status)?;
+                    writeln!(client.stream, "  > Ban Status: {}", banned_status)?;
+                    writeln!(client.stream, "  > Mute Status: {}", muted_status)?;                        
+                }
+            }
+
+            Ok(CommandResult::Handled)
+        }
+
         Command::Account | Command::AccountLogout | Command::AccountEditUsername { .. } | Command::AccountEditPassword { .. } | Command::AccountImport { .. } | Command::AccountExport { .. } | Command::AccountDelete { .. } |
-        Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } => {
+        Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } |
+        Command::AFK | Command::Send { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
+        Command::SuperReset { .. } | Command::SuperRename { .. } | Command::SuperExport { .. } | Command::SuperWhitelist | Command::SuperWhitelistToggle | Command::SuperWhitelistAdd { .. } | Command::SuperWhitelistRemove { .. } | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesPerms | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
+        Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
+        Command::LogList | Command::LogSave { .. } | Command::LogLoad { .. } |
+        Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Must be in the lobby to perform this command".yellow())?;
             Ok(CommandResult::Handled)

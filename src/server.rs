@@ -52,7 +52,8 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
     let client_arc = Arc::new(Mutex::new(Client {
         stream: stream.try_clone()?,
         addr: peer,
-        state: ClientState::Guest
+        state: ClientState::Guest,
+        ignore_list: Vec::new(),
     }));
 
     // Insert the new client into the clients map
