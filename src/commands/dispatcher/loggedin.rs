@@ -44,31 +44,13 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             Ok(CommandResult::Stop)
         }
 
-        Command::Leave => {
+        Command::Leave | Command::Status | Command::DM { .. } => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in a room to leave the room".yellow())?;
+            writeln!(client.stream, "{}", "Must be in a room to perform this command".yellow())?;
             Ok(CommandResult::Handled)
         }
 
-        Command::Status => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in a room to see your room status".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::DM { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in a room to send direct messages".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::AccountRegister { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "You are already logged in".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::AccountLogin { .. } => {
+        Command::AccountRegister { .. } | Command::AccountLogin { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "You are already logged in".yellow())?;
             Ok(CommandResult::Handled)
@@ -491,7 +473,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             };
 
             if room.whitelist_enabled && !room.whitelist.contains(username) {
-                writeln!(lock_client(&client)?.stream, "{}", "Access denied: you are not whitelisted for this room".yellow())?;
+                writeln!(lock_client(&client)?.stream, "{}", "You aren't whitelisted for this room".red())?;
                 return Ok(CommandResult::Handled);
             }
 

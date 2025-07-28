@@ -145,19 +145,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             Ok(CommandResult::Handled)
         }
 
-        Command::AccountLogout => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "You are not currently logged in".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::AccountEditUsername { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "You are not currently logged in".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::AccountEditPassword { .. } => {
+        Command::AccountLogout | Command::AccountEditUsername { .. } | Command::AccountEditPassword { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "You are not currently logged in".yellow())?;
             Ok(CommandResult::Handled)
@@ -247,33 +235,9 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             Ok(CommandResult::Handled)
         }
 
-        Command::RoomList => {
+        Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must log in to view rooms".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::RoomCreate { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must log in to create a room".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::RoomJoin { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must log in to join a room".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::RoomImport { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must log in to import a room".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::RoomDelete { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must log in to delete a room".yellow())?;
+            writeln!(client.stream, "{}", "Must log in to perform this command".yellow())?;
             Ok(CommandResult::Handled)
         }
 

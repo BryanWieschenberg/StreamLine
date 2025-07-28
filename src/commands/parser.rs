@@ -70,11 +70,11 @@ pub fn parse_command(input: &str) -> Command {
         ["leave"] => Command::Leave,
         ["status"] => Command::Status,
         
-        ["message", recipient, message] |
-        ["msg", recipient, message] |
-        ["dm", recipient, message] => Command::DM {
+        ["message", recipient, message @ ..] |
+        ["msg", recipient, message @ ..] |
+        ["dm", recipient, message @ ..] if !message.is_empty() => Command::DM {
             recipient: recipient.to_string(),
-            message: message.to_string()
+            message: message.join(" ")
         },
 
         ["message", ..] |

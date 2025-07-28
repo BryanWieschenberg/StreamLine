@@ -108,8 +108,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 }
             };
 
-            let room = lock_room(&room_arc)?;
-            let user_info = match room.users.get(username) {
+            let room_guard = lock_room(&room_arc)?;
+            let user_info = match room_guard.users.get(username) {
                 Some(info) => info,
                 None => {
                     let mut client = lock_client(&client)?;
@@ -149,7 +149,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             };
 
             writeln!(client.stream, "{}\n{} {}\n{} {}\n{} {}\n{} {}",
-                format!("Status for {}:", username).green(),
+                format!("Status for '{}' in Room '{}':", username, room).green(),
                 "> Role:".green(), role,
                 "> Nickname:".green(), if user_info.nick.is_empty() { "None".italic().to_string() } else { user_info.nick.clone() },
                 "> Color:".green(), color_display,
@@ -209,87 +209,16 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
-        Command::AccountRegister { .. } => {
+        Command::AccountRegister { .. } | Command::AccountLogin { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Already logged in".yellow())?;
             Ok(CommandResult::Handled)
         }
 
-        Command::AccountLogin { .. } => {
+        Command::Account | Command::AccountLogout | Command::AccountEditUsername { .. } | Command::AccountEditPassword { .. } | Command::AccountImport { .. } | Command::AccountExport { .. } | Command::AccountDelete { .. } |
+        Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } => {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Already logged in".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::AccountLogout => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in the lobby to log out".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::AccountEditUsername { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in the lobby to edit your account".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::AccountEditPassword { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in the lobby to edit your account".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::AccountImport { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in the lobby to import an account".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::AccountExport { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in the lobby to export your account".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::AccountDelete { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in the lobby to delete your account".green())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::Account => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", format!("Currently logged in as: {} (room: {})", username, room).green())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::RoomList => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in the lobby to view rooms".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::RoomCreate { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in the lobby to create a room".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::RoomJoin { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in the lobby to join a room".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::RoomImport { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in the lobby to import a room".yellow())?;
-            Ok(CommandResult::Handled)
-        }
-
-        Command::RoomDelete { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must log in to delete a room".yellow())?;
+            writeln!(client.stream, "{}", "Must be in the lobby to perform this command".yellow())?;
             Ok(CommandResult::Handled)
         }
 

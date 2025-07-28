@@ -19,7 +19,6 @@
             "user": [
                 "afk",
                 "send",
-                "msg",
                 "me",
                 "user",
                 "log"
@@ -32,7 +31,7 @@
                 "hidden": false,
                 "muted": "",
                 "nick": "",
-                "role": "user"
+                "role": "moderator"
             },
             "jeff": {
                 "banned": "",
@@ -82,49 +81,6 @@
         "whitelist_enabled": false
     },
     "test": {
-        "roles": {
-            "colors": {},
-            "moderator": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "super.users",
-                "user",
-                "log",
-                "mod"
-            ],
-            "user": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "user",
-                "log"
-            ]
-        },
-        "users": {
-            "bryan": {
-                "banned": "",
-                "color": "",
-                "hidden": false,
-                "muted": "",
-                "nick": "",
-                "role": "owner"
-            },
-            "jeff": {
-                "banned": "",
-                "color": "",
-                "hidden": false,
-                "muted": "",
-                "nick": "",
-                "role": "user"
-            }
-        },
-        "whitelist": [],
-        "whitelist_enabled": false
-    },
-    "test2": {
         "roles": {
             "colors": {},
             "moderator": [
