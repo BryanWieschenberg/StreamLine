@@ -1,14 +1,16 @@
 use std::collections::{HashSet, HashMap};
 use once_cell::sync::Lazy;
 use sha2::{Sha256, Digest};
-use crate::state::types::{Clients, ClientState};
 use colored::Colorize;
+use std::io::{self, Write};
+use std::sync::{Arc, Mutex};
+use std::fs::write;
+use crate::state::types::{Clients, ClientState};
 use crate::state::types::Roles;
 use crate::commands::parser::Command;
 use crate::state::types::{Client, Rooms};
-use crate::utils::{lock_client, lock_room, lock_rooms};
-use std::io::{self, Write};
-use std::sync::{Arc, Mutex};
+use crate::utils::{lock_client, lock_room, lock_rooms, lock_rooms_storage};
+use crate::state::types::Room;
 
 pub static DESCRIPTIONS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     HashMap::from([
@@ -188,4 +190,23 @@ pub fn has_permission(cmd: &Command, client: Arc<Mutex<Client>>, rooms: &Rooms, 
     }
 
     return Ok(true)
+}
+
+pub fn save_rooms_to_disk(map: &HashMap<String, Arc<Mutex<Room>>>) -> std::io::Result<()> {
+    let _lock = lock_rooms_storage()?; // handle poisoned lock gracefully
+
+    let mut serializable_map = HashMap::new();
+    for (k, arc_mutex_room) in map.iter() {
+        match lock_room(arc_mutex_room) {
+            Ok(room_guard) => {
+                serializable_map.insert(k.clone(), room_guard.clone());
+            }
+            Err(e) => {
+                eprintln!("Failed to lock room '{}': {}", k, e);
+            }
+        }
+    }
+
+    let json = serde_json::to_string_pretty(&serializable_map)?;
+    write("data/rooms.json", json)
 }

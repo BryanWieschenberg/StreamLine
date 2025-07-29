@@ -1,11 +1,12 @@
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
+use std::collections::{HashMap};
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission};
+use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk};
 use crate::state::types::{Client, Clients, ClientState, Rooms};
-use crate::utils::{lock_client, lock_clients, lock_room, lock_rooms};
+use crate::utils::{lock_client, lock_clients, lock_room, lock_rooms, lock_rooms_storage};
 use super::CommandResult;
 
 pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, room: &String) -> io::Result<CommandResult> {
@@ -295,10 +296,236 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
+        Command::SuperRename { name } => {
+            let mut rooms_map = lock_rooms(rooms)?;
+            let old_name = room.clone();
+
+            if rooms_map.contains_key(&name) {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("Room name '{}' is already taken", name).yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            let room_arc = match rooms_map.remove(&old_name) {
+                Some(r) => r,
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room '{}' not found", old_name).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            rooms_map.insert(name.clone(), Arc::clone(&room_arc));
+
+            // Update all clients currently in the renamed room
+            let clients_map = lock_clients(clients)?;
+            for client_arc in clients_map.values() {
+                let mut c = lock_client(client_arc)?;
+                if let ClientState::InRoom { room: r, .. } = &mut c.state {
+                    if r == &old_name {
+                        *r = name.clone();
+                    }
+                }
+            }
+
+            // Save updated room list to disk
+            let _room_save_lock = lock_rooms_storage()?;
+            let serializable_map: HashMap<_, _> = rooms_map.iter()
+                .filter_map(|(k, v)| {
+                    match lock_room(v) {
+                        Ok(guard) => Some((k.clone(), guard.clone())),
+                        Err(e) => {
+                            eprintln!("Failed to lock room '{}': {}", k, e);
+                            None
+                        }
+                    }
+                })
+                .collect();
+
+            let serialized = match serde_json::to_string_pretty(&serializable_map) {
+                Ok(json) => json,
+                Err(e) => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Failed to serialize rooms: {e}").red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            if let Err(e) = std::fs::write("data/rooms.json", serialized) {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("Failed to write to disk: {e}").red())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", format!("Room renamed from '{}' to '{}'", old_name, name).green())?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::SuperWhitelist => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(arc) => arc,
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room '{}' not found", room).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let room_guard = lock_room(room_arc)?;
+            let mut client = lock_client(&client)?;
+
+            if room_guard.whitelist_enabled {
+                writeln!(client.stream, "{}", "- Whitelist is currently ENABLED -".green())?;
+
+                if room_guard.whitelist.is_empty() {
+                    writeln!(client.stream, "{}", "  > No users are currently whitelisted".green())?;
+                } else {
+                    writeln!(client.stream, "{}", "Whitelisted users:".green())?;
+                    for user in &room_guard.whitelist {
+                        writeln!(client.stream, "  > {}", user.cyan())?;
+                    }
+                }
+            } else {
+                writeln!(client.stream, "{}", "- Whitelist is currently DISABLED -".green())?;
+            }
+
+            Ok(CommandResult::Handled)
+        }
+
+        Command::SuperWhitelistToggle => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(arc) => Arc::clone(arc),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room '{}' not found", room).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            {
+                let mut room_guard = lock_room(&room_arc)?;
+                room_guard.whitelist_enabled = !room_guard.whitelist_enabled;
+            }
+
+            if let Ok(_room_save_lock) = crate::state::types::ROOMS_LOCK.lock() {
+                let mut serializable_map = HashMap::new();
+
+                for (k, arc_mutex_room) in rooms_map.iter() {
+                    if let Ok(room_guard) = arc_mutex_room.lock() {
+                        serializable_map.insert(k.clone(), room_guard.clone());
+                    }
+                }
+
+                match serde_json::to_string_pretty(&serializable_map) {
+                    Ok(json) => {
+                        if let Err(e) = std::fs::write("data/rooms.json", json) {
+                            let mut client = lock_client(&client)?;
+                            writeln!(client.stream, "{}", format!("Failed to write rooms.json: {}", e).red())?;
+                            return Ok(CommandResult::Handled);
+                        }
+                    }
+                    Err(e) => {
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", format!("Failed to serialize rooms: {}", e).red())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                }
+            } else {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", "Failed to acquire room save lock".red())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            let room_guard = lock_room(&room_arc)?;
+            let mut client = lock_client(&client)?;
+            if room_guard.whitelist_enabled {
+                writeln!(client.stream, "{}", "Whitelist is now ENABLED".green())?;
+            } else {
+                writeln!(client.stream, "{}", "Whitelist is now DISABLED".green())?;
+            }
+
+            Ok(CommandResult::Handled)
+        }
+
+        Command::SuperWhitelistAdd { users } => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(arc) => Arc::clone(arc),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room '{}' not found", room).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let mut client = lock_client(&client)?;
+            let mut added_any = false;
+            {
+                let mut room_guard = lock_room(&room_arc)?;
+
+                for user in users.split_whitespace() {
+                    if room_guard.whitelist.contains(&user.to_string()) {
+                        writeln!(client.stream, "{}", format!("'{}' is already whitelisted", user).cyan())?;
+                    } else {
+                        room_guard.whitelist.push(user.to_string());
+                        writeln!(client.stream, "{}", format!("Added '{}' to the whitelist", user).green())?;
+                        added_any = true;
+                    }
+                }
+            }
+
+            if added_any {
+                if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                    writeln!(client.stream, "{}", format!("Failed to save rooms: {}", e).red())?;
+                }
+            }
+
+            Ok(CommandResult::Handled)
+        }
+
+        Command::SuperWhitelistRemove { users } => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(arc) => Arc::clone(arc),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room '{}' not found", room).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let mut client = lock_client(&client)?;
+            let mut removed_any = false;
+            {
+                let mut room_guard = lock_room(&room_arc)?;
+
+                for user in users.split_whitespace() {
+                    if let Some(pos) = room_guard.whitelist.iter().position(|u| u == user) {
+                        room_guard.whitelist.remove(pos);
+                        writeln!(client.stream, "{}", format!("Removed '{}' from the whitelist", user).green())?;
+                        removed_any = true;
+                    } else {
+                        writeln!(client.stream, "{}", format!("'{}' is not in the whitelist", user).cyan())?;
+                    }
+                }
+            }
+
+            if removed_any {
+                if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                    writeln!(client.stream, "{}", format!("Failed to save rooms: {}", e).red())?;
+                }
+            }
+
+            Ok(CommandResult::Handled)
+        }
+
         Command::Account | Command::AccountLogout | Command::AccountEditUsername { .. } | Command::AccountEditPassword { .. } | Command::AccountImport { .. } | Command::AccountExport { .. } | Command::AccountDelete { .. } |
         Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } |
         Command::AFK | Command::Send { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
-        Command::SuperRename { .. } | Command::SuperExport { .. } | Command::SuperWhitelist | Command::SuperWhitelistToggle | Command::SuperWhitelistAdd { .. } | Command::SuperWhitelistRemove { .. } | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesPerms | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
+        Command::SuperExport { .. } | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesPerms | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
         Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
             let mut client = lock_client(&client)?;

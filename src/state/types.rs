@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::net::{TcpStream, SocketAddr};
 use std::sync::{Arc, Mutex};
 use once_cell::sync::Lazy;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -21,27 +21,24 @@ pub struct Client {
 
 pub type Clients = Arc<Mutex<HashMap<SocketAddr, Arc<Mutex<Client>>>>>;
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Room {
     pub whitelist_enabled: bool,
     pub whitelist: Vec<String>,
     pub roles: Roles,
     pub users: HashMap<String, RoomUser>,
-    #[serde(default, skip_deserializing)]
+    #[serde(default, skip_serializing, skip_deserializing)]
     pub online_users: Vec<String>
 }
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Roles {
     pub moderator: Vec<String>,
     pub user: Vec<String>,
     pub colors: HashMap<String, String>,
 }
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RoomUser {
     pub nick: String,
     pub color: String,

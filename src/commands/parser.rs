@@ -59,7 +59,7 @@ impl ToString for Command {
     }
 }
 
-#[derive(Debug, Clone)]
+// #[derive(Debug, Clone)]
 pub enum Command {
     Help,
     Ping, //TODO:
@@ -421,9 +421,96 @@ pub fn parse_command(input: &str) -> Command {
             Command::InvalidSyntax { err_msg }
         },
 
+        ["super", "rename", name] |
+        ["s", "rename", name] |
+        ["super", "rn", name] |
+        ["s", "rn", name] => Command::SuperRename {
+            name: name.to_string()
+        },
+
+        ["super", "rename", ..] |
+        ["s", "rename", ..] |
+        ["super", "rn", ..] |
+        ["s", "rn", ..] => {
+            let err_msg = format!("{}", "Usage: /super rename <new room name>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "whitelist", "info"] |
+        ["super", "wl", "info"] |
+        ["s", "whitelist", "info"] |
+        ["s", "wl", "info"] |
+        ["super", "whitelist", "i"] |
+        ["super", "wl", "i"] |
+        ["s", "whitelist", "i"] |
+        ["s", "wl", "i"] => Command::SuperWhitelist,
+
+        ["super", "whitelist", "toggle"] |
+        ["super", "wl", "toggle"] |
+        ["s", "whitelist", "toggle"] |
+        ["s", "wl", "toggle"] |
+        ["super", "whitelist", "t"] |
+        ["super", "wl", "t"] |
+        ["s", "whitelist", "t"] |
+        ["s", "wl", "t"] => Command::SuperWhitelistToggle,
+
+        ["super", "whitelist", "add", users @ ..] |
+        ["super", "wl", "add", users @ ..] |
+        ["s", "whitelist", "add", users @ ..] |
+        ["s", "wl", "add", users @ ..] |
+        ["super", "whitelist", "a", users @ ..] |
+        ["super", "wl", "a", users @ ..] |
+        ["s", "whitelist", "a", users @ ..] |
+        ["s", "wl", "a", users @ ..] if !users.is_empty() => Command::SuperWhitelistAdd {
+            users: users.join(" "),
+        },
+
+        ["super", "whitelist", "add", ..] |
+        ["super", "wl", "add", ..] |
+        ["s", "whitelist", "add", ..] |
+        ["s", "wl", "add", ..] |
+        ["super", "whitelist", "a", ..] |
+        ["super", "wl", "a", ..] |
+        ["s", "whitelist", "a", ..] |
+        ["s", "wl", "a", ..] => {
+            let err_msg = format!("{}", "Usage: /super whitelist add <user1> <user2> ...".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "whitelist", "remove", users @ ..] |
+        ["super", "wl", "remove", users @ ..] |
+        ["s", "whitelist", "remove", users @ ..] |
+        ["s", "wl", "remove", users @ ..] |
+        ["super", "whitelist", "r", users @ ..] |
+        ["super", "wl", "r", users @ ..] |
+        ["s", "whitelist", "r", users @ ..] |
+        ["s", "wl", "r", users @ ..] if !users.is_empty() => Command::SuperWhitelistRemove {
+            users: users.join(" "),
+        },
+
+        ["super", "whitelist", "remove", ..] |
+        ["super", "wl", "remove", ..] |
+        ["s", "whitelist", "remove", ..] |
+        ["s", "wl", "remove", ..] |
+        ["super", "whitelist", "r", ..] |
+        ["super", "wl", "r", ..] |
+        ["s", "whitelist", "r", ..] |
+        ["s", "wl", "r", ..] => {
+            let err_msg = format!("{}", "Usage: /super whitelist remove <user1> <user2> ...".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "whitelist", ..] |
+        ["super", "wl", ..] |
+        ["s", "whitelist", ..] |
+        ["s", "wl", ..] => {
+            let err_msg = format!("{}", "Super whitelist commands:\n> /super whitelist info\n> /super whitelist toggle\n> /super whitelist add <user1> <user2> ...\n> /super whitelist remove <user1> <user2> ...".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
         ["super", ..] |
         ["s", ..] => {
-            let err_msg = format!("{}", "Super commands:\n> TODO:".bright_blue());
+            let err_msg = format!("{}", "Super commands:\n> /super users\n> /super rename <new room name>\n> /super export OR /super export <filename>\n> /super whitelist\n> /super limit\n> /super roles".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 

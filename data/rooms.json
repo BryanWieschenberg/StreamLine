@@ -1,139 +1,142 @@
 {
-    "general": {
-        "roles": {
-            "colors": {
-                "owner": "#FFD700",
-                "admin": "#FF3030",
-                "mod": "#0080FF"
-            },
-            "moderator": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "super.users",
-                "user",
-                "mod"
-            ],
-            "user": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "user"
-            ]
-        },
-        "users": {
-            "balls": {
-                "banned": "",
-                "color": "",
-                "hidden": false,
-                "muted": "",
-                "nick": "",
-                "role": "user"
-            },
-            "bryan": {
-                "banned": "",
-                "color": "#0080FF",
-                "hidden": false,
-                "muted": "",
-                "nick": "",
-                "role": "moderator"
-            },
-            "jeff": {
-                "banned": "",
-                "color": "",
-                "hidden": false,
-                "muted": "",
-                "nick": "",
-                "role": "user"
-            }
-        },
-        "whitelist": [],
-        "whitelist_enabled": false
+  "fuckass": {
+    "whitelist_enabled": true,
+    "whitelist": [
+      "shithead",
+      "bryan"
+    ],
+    "roles": {
+      "moderator": [
+        "afk",
+        "send",
+        "msg",
+        "me",
+        "super.users",
+        "user",
+        "mod"
+      ],
+      "user": [
+        "afk",
+        "send",
+        "msg",
+        "me",
+        "user"
+      ],
+      "colors": {
+        "owner": "#FFD700",
+        "mod": "#0080FF",
+        "admin": "#FF3030"
+      }
     },
-    "special": {
-        "roles": {
-            "colors": {
-                "owner": "#FFD700",
-                "admin": "#FF3030",
-                "mod": "#0080FF"
-            },
-            "moderator": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "super.users",
-                "user",
-                "mod"
-            ],
-            "user": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "user"
-            ]
-        },
-        "users": {
-            "bryan": {
-                "banned": "",
-                "color": "",
-                "hidden": false,
-                "muted": "",
-                "nick": "",
-                "role": "owner"
-            },
-            "jeff": {
-                "banned": "",
-                "color": "",
-                "hidden": false,
-                "muted": "",
-                "nick": "",
-                "role": "user"
-            }
-        },
-        "whitelist": [],
-        "whitelist_enabled": false
-    },
-    "test": {
-        "roles": {
-            "colors": {
-                "owner": "#FFD700",
-                "admin": "#FF3030",
-                "mod": "#0080FF"
-            },
-            "moderator": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "super.users",
-                "user",
-                "mod"
-            ],
-            "user": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "user"
-            ]
-        },
-        "users": {
-            "bryan": {
-                "banned": "",
-                "color": "",
-                "hidden": false,
-                "muted": "",
-                "nick": "",
-                "role": "owner"
-            }
-        },
-        "whitelist": [
-            "bryan"
-        ],
-        "whitelist_enabled": true
+    "users": {
+      "bryan": {
+        "nick": "",
+        "color": "",
+        "role": "owner",
+        "hidden": false,
+        "muted": "",
+        "banned": ""
+      },
+      "jeff": {
+        "nick": "",
+        "color": "",
+        "role": "user",
+        "hidden": false,
+        "muted": "",
+        "banned": ""
+      }
     }
+  },
+  "test": {
+    "whitelist_enabled": true,
+    "whitelist": [
+      "bryan"
+    ],
+    "roles": {
+      "moderator": [
+        "afk",
+        "send",
+        "msg",
+        "me",
+        "super.users",
+        "user",
+        "mod"
+      ],
+      "user": [
+        "afk",
+        "send",
+        "msg",
+        "me",
+        "user"
+      ],
+      "colors": {
+        "admin": "#FF3030",
+        "mod": "#0080FF",
+        "owner": "#FFD700"
+      }
+    },
+    "users": {
+      "bryan": {
+        "nick": "",
+        "color": "",
+        "role": "owner",
+        "hidden": false,
+        "muted": "",
+        "banned": ""
+      }
+    }
+  },
+  "general": {
+    "whitelist_enabled": false,
+    "whitelist": [],
+    "roles": {
+      "moderator": [
+        "afk",
+        "send",
+        "msg",
+        "me",
+        "super.users",
+        "user",
+        "mod"
+      ],
+      "user": [
+        "afk",
+        "send",
+        "msg",
+        "me",
+        "user"
+      ],
+      "colors": {
+        "admin": "#FF3030",
+        "mod": "#0080FF",
+        "owner": "#FFD700"
+      }
+    },
+    "users": {
+      "jeff": {
+        "nick": "",
+        "color": "",
+        "role": "user",
+        "hidden": false,
+        "muted": "",
+        "banned": ""
+      },
+      "bryan": {
+        "nick": "",
+        "color": "#0080FF",
+        "role": "moderator",
+        "hidden": false,
+        "muted": "",
+        "banned": ""
+      },
+      "balls": {
+        "nick": "",
+        "color": "",
+        "role": "user",
+        "hidden": false,
+        "muted": "",
+        "banned": ""
+      }
+    }
+  }
 }
