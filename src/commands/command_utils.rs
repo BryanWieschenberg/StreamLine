@@ -18,7 +18,6 @@ pub static DESCRIPTIONS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
         ("me",              "> /me <msg>           Send an emote message"),
         ("super",           "> /super              Administrator commands"),
         ("super.users",     "> /super users        Show all room user data"),
-        ("super.reset",     "> /super reset        Reset room back to default"),
         ("super.rename",    "> /super rename       Changes room name"),
         ("super.export",    "> /super export       Saves room data"),
         ("super.whitelist", "> /super whitelist    Manage room whitelist"),
@@ -30,10 +29,6 @@ pub static DESCRIPTIONS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
         ("user.recolor",    "> /user recolor       Changes your name color in the room"),
         ("user.ignore",     "> /user ignore        Stops messages from certain users"),
         ("user.hide",       "> /user hide          Hides you from /user list"),
-        ("log",             "> /log                Manage chat logs"),
-        ("log.list",        "> /log list           Show all available chat logs"),
-        ("log.save",        "> /log save           Saves chat log of current room session's messages"),
-        ("log.view",        "> /log view           Updates room session with chat log messages"),
         ("mod",             "> /mod                Use chat moderation tools"),
         ("mod.kick",        "> /mod kick           Kick users from the chat"),
         ("mod.mute",        "> /mod mute           Disable certain users from speaking"),
@@ -44,9 +39,8 @@ pub static DESCRIPTIONS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
 pub static RESTRICTED_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     HashSet::from([
         "afk", "send", "msg", "me",
-        "super", "super.users", "super.reset", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
+        "super", "super.users", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
         "user", "user.list", "user.rename", "user.recolor", "user.ignore", "user.hide",
-        "log", "log.list", "log.save", "log.view",
         "mod", "mod.kick", "mod.ban", "mod.mute",
     ])
 });
@@ -55,9 +49,8 @@ pub fn command_order() -> Vec<&'static str> {
     vec![
         "help", "clear", "ping", "quit", "leave", "status", "ignore",
         "afk", "send", "msg", "me",
-        "super", "super.users", "super.reset", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
+        "super", "super.users", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
         "user", "user.list", "user.rename", "user.recolor", "user.ignore", "user.hide",
-        "log", "log.list", "log.save", "log.view",
         "mod", "mod.kick", "mod.ban", "mod.mute"
     ]
 }

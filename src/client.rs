@@ -3,6 +3,9 @@ use std::net::TcpStream;
 use std::thread;
 use colored::Colorize;
 
+mod crypto;
+use crate::crypto::{encrypt, decrypt};
+
 // Function to handle receiving messages from the server
 fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
     let reader = BufReader::new(stream);

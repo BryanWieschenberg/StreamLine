@@ -3,10 +3,12 @@ use colored::*;
 impl ToString for Command {
     fn to_string(&self) -> String {
         match self {
-            Command::Help | Command::Ping | Command::Quit | Command::Leave | Command::Status | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } => "",
-            Command::DM { .. } => "msg",
+            Command::Help | Command::Ping | Command::Quit | Command::Leave | Command::Status |
+            Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } => "",
+            
             Command::AFK => "afk",
             Command::Send { .. } => "send",
+            Command::DM { .. } => "msg",
             Command::Me { .. } => "me",
 
             Command::Account |
@@ -26,7 +28,6 @@ impl ToString for Command {
             Command::RoomDelete { .. } => "",
 
             Command::SuperUsers => "super.users",
-            Command::SuperReset { .. } => "super.reset",
             Command::SuperRename { .. } => "super.rename",
             Command::SuperExport { .. } => "super.export",
             Command::SuperWhitelist => "super.whitelist",
@@ -47,10 +48,6 @@ impl ToString for Command {
             Command::UsersRecolor { .. } => "users.color",
             Command::UsersHide => "users.hide",
 
-            Command::LogList => "log.list",
-            Command::LogSave { .. } => "log.save",
-            Command::LogLoad { .. } => "log.load",
-
             Command::ModKick { .. } => "mod.kick",
             Command::ModMute { .. } => "mod.mute",
             Command::ModUnmute { .. } => "mod.unmute",
@@ -69,13 +66,14 @@ pub enum Command {
     Quit,
     Leave,
     Status,
-    DM { recipient: String, message: String }, //TODO: <- check if ignore works for this
-    AFK, //TODO:
-    Send { recipient: String, filename: String }, //TODO: <- check if ignore works for this
-    Me { message: String }, //TODO: <- check if ignore works for this
     IgnoreList, //TODO:
     IgnoreAdd { username: String }, //TODO:
     IgnoreRemove { username: String }, //TODO:
+
+    AFK, //TODO:
+    Send { recipient: String, filename: String }, //TODO: <- check if ignore works for this
+    DM { recipient: String, message: String }, //TODO: <- check if ignore works for this
+    Me { message: String }, //TODO: <- check if ignore works for this
 
     Account,
     AccountRegister { username: String, password: String, confirm: String },
@@ -94,7 +92,6 @@ pub enum Command {
     RoomDelete { name: String, force: bool },
 
     SuperUsers, //TODO:
-    SuperReset { force: bool }, //TODO:
     SuperRename { name: String }, //TODO:
     SuperExport { filename: String }, //TODO:
     SuperWhitelist, //TODO:
@@ -114,10 +111,6 @@ pub enum Command {
     UsersRename { name: String }, //TODO:
     UsersRecolor { color: String }, //TODO:
     UsersHide, //TODO:
-
-    LogList, //TODO:
-    LogSave { filename: String }, //TODO:
-    LogLoad { filename: String }, //TODO:
 
     ModKick { username: String }, //TODO:
     ModMute { username: String, time: String }, //TODO:

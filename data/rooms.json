@@ -2,9 +2,9 @@
     "general": {
         "roles": {
             "colors": {
-                "admin": "#FFF000",
-                "mod": "#0000FF",
-                "user": "#FFFFFF"
+                "owner": "#FFD700",
+                "admin": "#FF3030",
+                "mod": "#0080FF"
             },
             "moderator": [
                 "afk",
@@ -13,7 +13,6 @@
                 "me",
                 "super.users",
                 "user",
-                "log",
                 "mod"
             ],
             "user": [
@@ -21,8 +20,7 @@
                 "send",
                 "msg",
                 "me",
-                "user",
-                "log"
+                "user"
             ]
         },
         "users": {
@@ -56,7 +54,11 @@
     },
     "special": {
         "roles": {
-            "colors": {},
+            "colors": {
+                "owner": "#FFD700",
+                "admin": "#FF3030",
+                "mod": "#0080FF"
+            },
             "moderator": [
                 "afk",
                 "send",
@@ -64,7 +66,6 @@
                 "me",
                 "super.users",
                 "user",
-                "log",
                 "mod"
             ],
             "user": [
@@ -72,8 +73,7 @@
                 "send",
                 "msg",
                 "me",
-                "user",
-                "log"
+                "user"
             ]
         },
         "users": {
@@ -99,7 +99,11 @@
     },
     "test": {
         "roles": {
-            "colors": {},
+            "colors": {
+                "owner": "#FFD700",
+                "admin": "#FF3030",
+                "mod": "#0080FF"
+            },
             "moderator": [
                 "afk",
                 "send",
@@ -107,7 +111,6 @@
                 "me",
                 "super.users",
                 "user",
-                "log",
                 "mod"
             ],
             "user": [
@@ -115,8 +118,7 @@
                 "send",
                 "msg",
                 "me",
-                "user",
-                "log"
+                "user"
             ]
         },
         "users": {
