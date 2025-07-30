@@ -576,10 +576,132 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         }
                 
         Command::SuperRolesAdd { role, commands } => {
+            let target_role = match role.to_lowercase().as_str() {
+                "user" => "user",
+                "mod" | "moderator" => "moderator",
+                _ => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: role must be user|mod".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let cmd_tokens: Vec<&str> = commands.split_whitespace().collect();
+
+            let invalid: Vec<String> = cmd_tokens.iter().filter(|c| !RESTRICTED_COMMANDS.contains(**c)).map(|c| (*c).to_string()).collect();
+            if !invalid.is_empty() {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("Error: Unknown commands: {}", invalid.join(", ")).yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            let mut added = Vec::<String>::new();
+            {
+                let _store_lock = lock_rooms_storage()?;
+                let rooms_map   = lock_rooms(rooms)?;
+                let room_arc    = match rooms_map.get(room) {
+                    Some(r) => Arc::clone(r),
+                    None => {
+                        writeln!(lock_client(&client)?.stream, "{}", format!("Room {room} not found").yellow())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                };
+                let mut room_guard = lock_room(&room_arc)?;
+
+                let list = if target_role == "moderator" {
+                    &mut room_guard.roles.moderator
+                } else {
+                    &mut room_guard.roles.user
+                };
+
+                for &c in &cmd_tokens {
+                    let c_str = c.to_string();
+                    if !list.contains(&c_str) {
+                        list.push(c_str.clone());
+                        added.push(c_str);
+                    }
+                }
+            }
+
+            if !added.is_empty() {
+                let rooms_map = lock_rooms(rooms)?;
+                if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                    writeln!(lock_client(&client)?.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            }
+
+            let mut client = lock_client(&client)?;
+            if added.is_empty() {
+                writeln!(client.stream, "{}", "No changes made".yellow())?;
+            } else {
+                writeln!(client.stream, "{}", format!("Added for {target_role}: {}", added.join(", ")).green())?;
+            }
             Ok(CommandResult::Handled)
         }
         
         Command::SuperRolesRevoke { role, commands } => {
+            let target_role = match role.to_lowercase().as_str() {
+                "user" => "user",
+                "mod" | "moderator" => "moderator",
+                _ => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: role must be user|mod".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let cmd_tokens: Vec<&str> = commands.split_whitespace().collect();
+
+            let invalid: Vec<String> = cmd_tokens.iter().filter(|c| !RESTRICTED_COMMANDS.contains(**c)).map(|c| (*c).to_string()).collect();
+            if !invalid.is_empty() {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("Error: Unknown commands: {}", invalid.join(", ")).yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            let mut removed = Vec::<String>::new();
+            {
+                let _store_lock = lock_rooms_storage()?;
+                let rooms_map   = lock_rooms(rooms)?;
+                let room_arc    = match rooms_map.get(room) {
+                    Some(r) => Arc::clone(r),
+                    None => {
+                        writeln!(lock_client(&client)?.stream, "{}", format!("Room {room} not found").yellow())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                };
+                let mut room_guard = lock_room(&room_arc)?;
+
+                let list = if target_role == "moderator" {
+                    &mut room_guard.roles.moderator
+                } else {
+                    &mut room_guard.roles.user
+                };
+
+                list.retain(|existing| {
+                    let keep = !cmd_tokens.iter().any(|c| c == existing);
+                    if !keep {
+                        removed.push(existing.clone());
+                    }
+                    keep
+                });
+            }
+
+            if !removed.is_empty() {
+                let rooms_map = lock_rooms(rooms)?;
+                if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                    writeln!(lock_client(&client)?.stream, "{}", format!("Failed to save rooms: {}", e).red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            }
+
+            let mut client = lock_client(&client)?;
+            if removed.is_empty() {
+                writeln!(client.stream, "{}", "No changes made".yellow())?;
+            } else {
+                writeln!(client.stream, "{}", format!("Revoked for {target_role}: {}", removed.join(", ")).green())?;
+            }
             Ok(CommandResult::Handled)
         }
         

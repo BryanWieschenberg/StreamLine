@@ -71,7 +71,7 @@ pub enum Command {
 
     AFK, //TODO:
     Send { recipient: String, filename: String }, //TODO: <- check if ignore works for this
-    DM { recipient: String, message: String }, //TODO: <- check if ignore works for this
+    DM { recipient: String, message: String },
     Me { message: String }, //TODO: <- check if ignore works for this
 
     Account,

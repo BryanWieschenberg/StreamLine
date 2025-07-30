@@ -26,23 +26,23 @@
       ],
       "colors": {
         "owner": "#FFD700",
-        "mod": "#0080FF",
-        "admin": "#FF3030"
+        "admin": "#FF3030",
+        "mod": "#0080FF"
       }
     },
     "users": {
-      "bryan": {
-        "nick": "",
-        "color": "",
-        "role": "owner",
-        "hidden": false,
-        "muted": "",
-        "banned": ""
-      },
       "jeff": {
         "nick": "",
         "color": "",
         "role": "user",
+        "hidden": false,
+        "muted": "",
+        "banned": ""
+      },
+      "bryan": {
+        "nick": "",
+        "color": "",
+        "role": "owner",
         "hidden": false,
         "muted": "",
         "banned": ""
@@ -52,7 +52,8 @@
   "test": {
     "whitelist_enabled": true,
     "whitelist": [
-      "bryan"
+      "bryan",
+      "jeff"
     ],
     "msg_rate": 10,
     "session_timeout": 60,
@@ -71,12 +72,15 @@
         "send",
         "msg",
         "me",
-        "user"
+        "user",
+        "super.rename",
+        "super.export",
+        "super"
       ],
       "colors": {
+        "owner": "#FFD700",
         "admin": "#FF3030",
-        "mod": "#0080FF",
-        "owner": "#FFD700"
+        "mod": "#0080FF"
       }
     },
     "users": {
@@ -84,6 +88,14 @@
         "nick": "",
         "color": "",
         "role": "owner",
+        "hidden": false,
+        "muted": "",
+        "banned": ""
+      },
+      "jeff": {
+        "nick": "",
+        "color": "",
+        "role": "user",
         "hidden": false,
         "muted": "",
         "banned": ""
@@ -114,20 +126,12 @@
         "super.users"
       ],
       "colors": {
-        "admin": "#FF3030",
         "mod": "#0080FF",
+        "admin": "#FF3030",
         "owner": "#FFD700"
       }
     },
     "users": {
-      "jeff": {
-        "nick": "",
-        "color": "",
-        "role": "user",
-        "hidden": false,
-        "muted": "",
-        "banned": ""
-      },
       "bryan": {
         "nick": "",
         "color": "#0080FF",
@@ -137,6 +141,14 @@
         "banned": ""
       },
       "balls": {
+        "nick": "",
+        "color": "",
+        "role": "user",
+        "hidden": false,
+        "muted": "",
+        "banned": ""
+      },
+      "jeff": {
         "nick": "",
         "color": "",
         "role": "user",
