@@ -1,15 +1,16 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::net::{TcpStream, SocketAddr};
 use std::sync::{Arc, Mutex};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 
 #[allow(dead_code)]
 #[derive(Clone)]
 pub enum ClientState {
     Guest,
     LoggedIn {username: String},
-    InRoom {username: String, room: String, room_time: Option<std::time::SystemTime>},
+    InRoom {username: String, room: String, room_time: Option<std::time::SystemTime>, msg_timestamps: VecDeque<Instant>},
 }
 
 pub struct Client {

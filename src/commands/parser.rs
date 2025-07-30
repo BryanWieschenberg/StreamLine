@@ -34,6 +34,7 @@ impl ToString for Command {
             Command::SuperWhitelistToggle => "super.whitelist",
             Command::SuperWhitelistAdd { .. } => "super.whitelist",
             Command::SuperWhitelistRemove { .. } => "super.whitelist",
+            Command::SuperLimit => "super.limit",
             Command::SuperLimitRate { .. } => "super.limit",
             Command::SuperLimitSession { .. } => "super.limit",
             Command::SuperRoles => "super.roles",
@@ -97,8 +98,9 @@ pub enum Command {
     SuperWhitelistToggle,
     SuperWhitelistAdd { users: String },
     SuperWhitelistRemove { users: String },
-    SuperLimitRate { limit: u8 }, //TODO:
-    SuperLimitSession { limit: u32 }, //TODO:
+    SuperLimit,
+    SuperLimitRate { limit: u8 },
+    SuperLimitSession { limit: u32 },
     SuperRoles,
     SuperRolesAdd { role: String, commands: String },
     SuperRolesRevoke { role: String, commands: String },
@@ -503,6 +505,86 @@ pub fn parse_command(input: &str) -> Command {
         ["s", "whitelist", ..] |
         ["s", "wl", ..] => {
             let err_msg = format!("{}", "Super whitelist commands:\n> /super whitelist info\n> /super whitelist toggle\n> /super whitelist add <user1> <user2> ...\n> /super whitelist remove <user1> <user2> ...".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "limit", "info"] |
+        ["s", "limit", "info"] |
+        ["super", "l", "info"] |
+        ["s", "l", "info"] |
+        ["super", "limit", "i"] |
+        ["s", "limit", "i"] |
+        ["super", "l", "i"] |
+        ["s", "l", "i"] => Command::SuperLimit,
+
+        ["super", "limit", "info", ..] |
+        ["s", "limit", "info", ..] |
+        ["super", "l", "info", ..] |
+        ["s", "l", "info", ..] |
+        ["super", "limit", "i", ..] |
+        ["s", "limit", "i", ..] |
+        ["super", "l", "i", ..] |
+        ["s", "l", "i", ..] => {
+            let err_msg = format!("{}", "Usage:\n> /super limit info".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "limit", "rate", limit] |
+        ["s", "limit", "rate", limit] |
+        ["super", "l", "rate", limit] |
+        ["s", "l", "rate", limit] |
+        ["super", "limit", "r", limit] |
+        ["s", "limit", "r", limit] |
+        ["super", "l", "r", limit] |
+        ["s", "l", "r", limit] => {
+            match limit.parse::<u8>() {
+                Ok(l) if l > 0 => Command::SuperLimitRate { limit: l },
+                _ => {
+                    let err_msg = format!("{}", "Usage: /super limit rate <limit (1-255)>".bright_blue());
+                    Command::InvalidSyntax { err_msg }
+                }
+            }
+        },
+
+        ["super", "limit", "rate", ..] |
+        ["s", "limit", "rate", ..] |
+        ["super", "l", "rate", ..] |
+        ["s", "l", "rate", ..] |
+        ["super", "limit", "r", ..] |
+        ["s", "limit", "r", ..] |
+        ["super", "l", "r", ..] |
+        ["s", "l", "r", ..] => {
+            let err_msg = format!("{}", "Usage: /super limit rate <limit>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        // SuperLimitSession
+        ["super", "limit", "session", limit] |
+        ["s", "limit", "session", limit] |
+        ["super", "l", "session", limit] |
+        ["s", "l", "session", limit] |
+        ["super", "limit", "s", limit] |
+        ["s", "limit", "s", limit] |
+        ["super", "l", "s", limit] |
+        ["s", "l", "s", limit] => {
+            match limit.parse::<u32>() {
+                Ok(l) if l > 0 => Command::SuperLimitSession { limit: l },
+                _ => {
+                    let err_msg = format!("{}", "Usage: /super limit session <limit (1-4294967295)>".bright_blue());
+                    Command::InvalidSyntax { err_msg }
+                }
+            }
+        },
+
+        ["super", "limit", "session", ..] |
+        ["s", "limit", "session", ..] |
+        ["super", "l", "session", ..] |
+        ["s", "l", "session", ..] |
+        ["super", "limit", "s", ..] |
+        ["s", "limit", "s", ..] |
+        ["super", "l", "s", ..] |
+        ["s", "l", "s", ..] => {
+            let err_msg = format!("{}", "Usage: /super limit session <limit>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 

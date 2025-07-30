@@ -530,6 +530,52 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
+        Command::SuperLimit => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room {} not found", room).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+            let room_guard = lock_room(&room_arc)?;
+
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}\n  > Message rate: {} messages per 5 sec\n  > Session timeout: {} min", "Current limits:".green(), room_guard.msg_rate, room_guard.session_timeout)?;
+            Ok(CommandResult::Handled)
+        }
+
+        Command::SuperLimitRate { limit } => {            
+            let new_rate = limit;
+            let rooms_map   = lock_rooms(rooms)?;
+
+            {
+                let _store_lock = lock_rooms_storage()?;
+                let room_arc    = match rooms_map.get(room) {
+                    Some(r) => Arc::clone(r),
+                    None => {
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", "Room not found".yellow())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                };
+
+                let mut room = lock_room(&room_arc)?;
+                room.msg_rate = new_rate;
+            }
+
+            let mut client = lock_client(&client)?;
+            if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                writeln!(client.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            writeln!(client.stream, "{}", format!("Message rate limited to {new_rate} per 5s").green())?;
+            Ok(CommandResult::Handled)
+        }
+
         Command::SuperRoles => {
             let rooms_map = lock_rooms(rooms)?;
             let room_arc = match rooms_map.get(room) {
@@ -874,7 +920,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         Command::Account | Command::AccountLogout | Command::AccountEditUsername { .. } | Command::AccountEditPassword { .. } | Command::AccountImport { .. } | Command::AccountExport { .. } | Command::AccountDelete { .. } |
         Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } |
         Command::AFK | Command::Send { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
-        Command::SuperExport { .. } | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } |
+        Command::SuperExport { .. } | Command::SuperLimitSession { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
         Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
             let mut client = lock_client(&client)?;

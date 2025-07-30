@@ -3,6 +3,7 @@ use std::io::{BufReader, BufRead, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Instant;
 
 use colored::Colorize;
 
@@ -14,7 +15,46 @@ mod state;
 use crate::state::types::{Clients, Client, ClientState, Rooms, Room};
 
 mod utils;
-use crate::utils::{lock_clients, lock_client};
+use crate::utils::{lock_clients, lock_client, lock_rooms, lock_room};
+
+pub fn check_rate_limit(client_arc: &std::sync::Arc<std::sync::Mutex<crate::state::types::Client>>, rooms: &Rooms) -> std::io::Result<bool> {
+    let now = Instant::now();
+
+    let mut c = lock_client(client_arc)?;
+    if let ClientState::InRoom { room: rname, msg_timestamps, .. } = &mut c.state {
+        let rooms_map = lock_rooms(rooms)?;
+        let rate = match rooms_map.get(rname) {
+            Some(room_arc) => match lock_room(room_arc) {
+                Ok(room) => room.msg_rate,
+                Err(_) => {
+                    writeln!(c.stream, "{}", "Error: could not lock room".red())?;
+                    return Ok(false);
+                }
+            },
+            None => {
+                writeln!(c.stream, "{}", "Error: room not found".yellow())?;
+                return Ok(false);
+            }
+        };
+
+        while let Some(ts) = msg_timestamps.front() {
+            if now.duration_since(*ts).as_secs() >= 5 {
+                msg_timestamps.pop_front();
+            }
+            else {
+                break;
+            }
+        }
+
+        if rate > 0 && msg_timestamps.len() as u8 >= rate {
+            writeln!(c.stream, "{}", "Rate limit exceeded, slow down your messages!".yellow())?;
+            return Ok(false);
+        }
+
+        msg_timestamps.push_back(now);
+    }
+    Ok(true)
+}
 
 fn broadcast_message(msg: &str, sender_arc: &Arc<Mutex<Client>>, clients: &Clients) -> std::io::Result<()> {
     let locked_clients = lock_clients(clients)?;
@@ -81,24 +121,25 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                     }
                 }
 
-                let mut sender = lock_client(&client_arc)?;
+                let allowed = check_rate_limit(&client_arc, &rooms)?;
+                if !allowed {
+                    continue;
+                }
 
-                match &sender.state {
-                    ClientState::InRoom { .. } => {
-                        drop(sender);
-                        if let Err(e) = broadcast_message(&msg, &client_arc, &clients) {
-                            eprintln!("Error broadcasting message from {peer}: {e}");
-                            break;
-                        }
+                let mut sender = lock_client(&client_arc)?;
+                
+                if let ClientState::InRoom { .. } = &sender.state {
+                    drop(sender);                                   // ← release the mutex
+                    if let Err(e) = broadcast_message(&msg, &client_arc, &clients) {
+                        eprintln!("Error broadcasting message from {peer}: {e}");
+                        break;
                     }
-                    ClientState::LoggedIn { .. } => {
-                        writeln!(sender.stream, "{}", "You must join a room to chat".yellow())?;
-                        continue;
-                    }
-                    ClientState::Guest => {
-                        writeln!(sender.stream, "{}", "You must log in to chat".yellow())?;
-                        continue;
-                    }
+                }
+                else if let ClientState::LoggedIn { .. } = &sender.state {
+                    writeln!(sender.stream, "{}", "You must join a room to chat".yellow())?;
+                }
+                else {
+                    writeln!(sender.stream, "{}", "You must log in to chat".yellow())?;
                 }
             }
             Err(e) => {
