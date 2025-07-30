@@ -10,7 +10,7 @@ use std::time::Instant;
 pub enum ClientState {
     Guest,
     LoggedIn {username: String},
-    InRoom {username: String, room: String, room_time: Option<std::time::SystemTime>, msg_timestamps: VecDeque<Instant>},
+    InRoom {username: String, room: String, room_time: Option<std::time::SystemTime>, msg_timestamps: VecDeque<Instant>, inactive_time: Option<std::time::SystemTime>},
 }
 
 pub struct Client {

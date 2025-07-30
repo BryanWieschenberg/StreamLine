@@ -544,7 +544,7 @@ pub fn parse_command(input: &str) -> Command {
                 match limit.parse::<u8>() {
                     Ok(l) if l > 0 => Command::SuperLimitRate { limit: l },
                     _ => Command::InvalidSyntax {
-                        err_msg: format!("{}", "Usage: /super limit rate <limit (1‑255) | *>".bright_blue())
+                        err_msg: format!("{}", "Usage: /super limit rate <limit secs (1‑255) | *>".bright_blue())
                     }
                 }
             }
@@ -558,11 +558,10 @@ pub fn parse_command(input: &str) -> Command {
         ["s", "limit", "r", ..] |
         ["super", "l", "r", ..] |
         ["s", "l", "r", ..] => {
-            let err_msg = format!("{}", "Usage: /super limit rate <limit (1-255) | *>".bright_blue());
+            let err_msg = format!("{}", "Usage: /super limit rate <limit secs (1-255) | *>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
-        // SuperLimitSession
         ["super", "limit", "session", limit] |
         ["s", "limit", "session", limit] |
         ["super", "l", "session", limit] |
@@ -571,11 +570,16 @@ pub fn parse_command(input: &str) -> Command {
         ["s", "limit", "s", limit] |
         ["super", "l", "s", limit] |
         ["s", "l", "s", limit] => {
-            match limit.parse::<u32>() {
-                Ok(l) if l > 0 => Command::SuperLimitSession { limit: l },
-                _ => {
-                    let err_msg = format!("{}", "Usage: /super limit session <limit (1-4294967295) | *>".bright_blue());
-                    Command::InvalidSyntax { err_msg }
+            if *limit == "*" { // * means unlimited, msg_rate is set to 0 as special case
+                Command::SuperLimitSession { limit: 0 }
+            }
+            else {
+                match limit.parse::<u32>() {
+                    Ok(l) if l > 0 => Command::SuperLimitSession { limit: l },
+                    _ => {
+                        let err_msg = format!("{}", "Usage: /super limit session <limit secs (1-4294967295) | *>".bright_blue());
+                        Command::InvalidSyntax { err_msg }
+                    }
                 }
             }
         },
@@ -588,7 +592,15 @@ pub fn parse_command(input: &str) -> Command {
         ["s", "limit", "s", ..] |
         ["super", "l", "s", ..] |
         ["s", "l", "s", ..] => {
-            let err_msg = format!("{}", "Usage: /super limit session <limit (1-4294967295) | *>".bright_blue());
+            let err_msg = format!("{}", "Usage: /super limit session <limit secs (1-4294967295) | *>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "limit", ..] |
+        ["s", "limit", ..] |
+        ["super", "l", ..] |
+        ["s", "l", ..] => {
+            let err_msg = format!("{}", "Super limit commands:\n> /super limit info\n> /super limit rate <limit secs (1-255) | *>\n/super limit session <limit secs (1-4294967295) | *>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 

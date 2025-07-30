@@ -539,7 +539,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 username: username.clone(),
                 room: name.clone(),
                 room_time: Some(SystemTime::now()),
-                msg_timestamps: VecDeque::new()
+                msg_timestamps: VecDeque::new(),
+                inactive_time: Some(SystemTime::now())
             };
 
             writeln!(client.stream, "{}", format!("Joined room: {}", name).green())?;

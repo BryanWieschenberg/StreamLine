@@ -3,21 +3,70 @@ use std::io::{BufReader, BufRead, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Instant;
-
+use std::time::{SystemTime, Instant, Duration};
 use colored::Colorize;
-
 mod commands;
 use crate::commands::parser::{Command, parse_command};
 use crate::commands::dispatcher::{dispatch_command, CommandResult};
-
 mod state;
 use crate::state::types::{Clients, Client, ClientState, Rooms, Room};
-
 mod utils;
 use crate::utils::{lock_clients, lock_client, lock_rooms, lock_room};
 
-pub fn check_rate_limit(client_arc: &std::sync::Arc<std::sync::Mutex<crate::state::types::Client>>, rooms: &Rooms) -> std::io::Result<bool> {
+pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()> {
+    loop {
+        // Check for inactive clients every 60 seconds
+        thread::sleep(Duration::from_secs(5)); //TODO: PUT BACK TO 60
+        let now = SystemTime::now();
+
+        // Get each room's timeout
+        let room_timeouts: HashMap<String, u32> = {
+            let rooms_guard = match rooms.lock() {
+                Ok(g)  => g,
+                Err(_) => continue,
+            };
+
+            rooms_guard
+                .iter()
+                .filter_map(|(name, arc)| {
+                    arc.lock().ok().map(|r| (name.clone(), r.session_timeout))
+                })
+                .collect()
+        };
+
+        let client_arcs: Vec<Arc<Mutex<_>>> = match clients.lock() {
+            Ok(map) => map.values().cloned().collect(),
+            Err(_)  => continue,
+        };
+
+        // Evaluate each client for inactivity
+        for client_arc in client_arcs {
+            if let Ok(mut client) = client_arc.lock() {
+                if let ClientState::InRoom { username, room, room_time, .. } = &mut client.state {
+                    let timeout = *room_timeouts.get(room).unwrap_or(&0);
+                    if timeout == 0 { continue; } // Unlimited session time for that room
+
+                    let last = room_time.unwrap_or(now);
+                    if now.duration_since(last)
+                          .unwrap_or_default()
+                          .as_secs() >= timeout as u64
+                    {
+                        // Kick to lobby
+                        let user = username.clone();
+                        let room_name = room.clone();
+
+                        client.state = ClientState::LoggedIn { username: user.clone() };
+                        writeln!(client.stream, "{}", "Session timed out, returned to lobby".yellow())?;
+
+                        println!("Auto-kicked {user} from {room_name} for inactivity");
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn check_rate_limit(client_arc: &Arc<Mutex<Client>>, rooms: &Rooms) -> std::io::Result<bool> {
     let now = Instant::now();
 
     let mut c = lock_client(client_arc)?;
@@ -112,6 +161,13 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
                 if msg.is_empty() { continue };
 
+                {
+                    let mut s = lock_client(&client_arc)?;
+                    if let ClientState::InRoom { inactive_time, .. } = &mut s.state {
+                        *inactive_time = Some(SystemTime::now());       // refresh on activity
+                    }
+                }
+
                 if msg.starts_with("/") {
                     let command: Command = parse_command(&msg);
                     
@@ -189,6 +245,20 @@ fn main() -> std::io::Result<()> {
     
     println!("Server listening on port {port}");
 
+    {
+        let clients = Arc::clone(&clients);
+        let rooms = Arc::clone(&rooms);
+
+        // Start the session housekeeper thread
+        thread::Builder::new()
+            .name("session-housekeeper".into())
+            .spawn(move || {
+                if let Err(e) = session_housekeeper(clients, rooms) {
+                    eprintln!("Thread for session housekeeping exited with error: {e}");
+                }
+            })?;
+    }
+
     // Main loop to accept incoming connections
     for stream in listener.incoming() {
         match stream {
@@ -196,12 +266,13 @@ fn main() -> std::io::Result<()> {
                 let peer = stream.peer_addr()?;
 
                 // Clone clients Arc and use the clone in the thread
-                let clients_ref = Arc::clone(&clients);
-                let rooms_ref = Arc::clone(&rooms);
+                let clients = Arc::clone(&clients);
+                let rooms = Arc::clone(&rooms);
+                
                 thread::Builder::new()
                     .name(format!("client-{peer}"))
                     .spawn(move || {
-                        if let Err(e) = handle_client(stream, peer, clients_ref, rooms_ref) {
+                        if let Err(e) = handle_client(stream, peer, clients, rooms) {
                             eprintln!("Thread for {peer} exited with error: {e}");
                         }
                     })?;
