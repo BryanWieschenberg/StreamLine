@@ -45,7 +45,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
         }
 
         Command::Leave | Command::Status | Command::DM { .. } | Command::AFK | Command::Send { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
-        Command::SuperUsers | Command::SuperRename { .. } | Command::SuperExport { .. } | Command::SuperWhitelist | Command::SuperWhitelistToggle | Command::SuperWhitelistAdd { .. } | Command::SuperWhitelistRemove { .. } | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesPerms | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
+        Command::SuperUsers | Command::SuperRename { .. } | Command::SuperExport { .. } | Command::SuperWhitelist | Command::SuperWhitelistToggle | Command::SuperWhitelistAdd { .. } | Command::SuperWhitelistRemove { .. } | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
         Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
             let mut client = lock_client(&client)?;
@@ -380,6 +380,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             let new_room = json!({
                 "whitelist_enabled": whitelist,
                 "whitelist": if whitelist { vec![username.clone()] } else { Vec::<String>::new() },
+                "msg_rate": 60,
+                "session_timeout": 10,
                 "roles": {
                     "moderator": ["afk", "send", "msg", "me", "super.users", "user", "log", "mod"],
                     "user": ["afk", "send", "msg", "me", "user", "log"],
@@ -439,6 +441,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             let room_obj = Room {
                 whitelist_enabled: whitelist,
                 whitelist: if whitelist { vec![username.clone()] } else { vec![] },
+                msg_rate: 60,
+                session_timeout: 10,
                 roles,
                 users,
                 online_users: Vec::new(),

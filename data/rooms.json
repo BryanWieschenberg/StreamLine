@@ -5,6 +5,8 @@
       "shithead",
       "bryan"
     ],
+    "msg_rate": 2,
+    "session_timeout": 1,
     "roles": {
       "moderator": [
         "afk",
@@ -52,6 +54,8 @@
     "whitelist": [
       "bryan"
     ],
+    "msg_rate": 10,
+    "session_timeout": 60,
     "roles": {
       "moderator": [
         "afk",
@@ -89,13 +93,15 @@
   "general": {
     "whitelist_enabled": false,
     "whitelist": [],
+    "msg_rate": 10,
+    "session_timeout": 60,
     "roles": {
       "moderator": [
         "afk",
         "send",
         "msg",
         "me",
-        "super.users",
+        "super",
         "user",
         "mod"
       ],
@@ -104,7 +110,8 @@
         "send",
         "msg",
         "me",
-        "user"
+        "user",
+        "super.users"
       ],
       "colors": {
         "admin": "#FF3030",

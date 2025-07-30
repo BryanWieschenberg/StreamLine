@@ -37,7 +37,6 @@ impl ToString for Command {
             Command::SuperLimitRate { .. } => "super.limit",
             Command::SuperLimitSession { .. } => "super.limit",
             Command::SuperRoles => "super.roles",
-            Command::SuperRolesPerms => "super.roles.perms",
             Command::SuperRolesAdd { .. } => "super.roles",
             Command::SuperRolesRevoke { .. } => "super.roles",
             Command::SuperRolesAssign { .. } => "super.roles",
@@ -62,7 +61,7 @@ impl ToString for Command {
 // #[derive(Debug, Clone)]
 pub enum Command {
     Help,
-    Ping, //TODO:
+    Ping,
     Quit,
     Leave,
     Status,
@@ -91,21 +90,20 @@ pub enum Command {
     RoomImport { filename: String },
     RoomDelete { name: String, force: bool },
 
-    SuperUsers, //TODO:
-    SuperRename { name: String }, //TODO:
+    SuperUsers,
+    SuperRename { name: String },
     SuperExport { filename: String }, //TODO:
-    SuperWhitelist, //TODO:
-    SuperWhitelistToggle, //TODO:
-    SuperWhitelistAdd { users: String }, //TODO:
-    SuperWhitelistRemove { users: String }, //TODO:
+    SuperWhitelist,
+    SuperWhitelistToggle,
+    SuperWhitelistAdd { users: String },
+    SuperWhitelistRemove { users: String },
     SuperLimitRate { limit: u8 }, //TODO:
     SuperLimitSession { limit: u32 }, //TODO:
-    SuperRoles, //TODO:
-    SuperRolesPerms, //TODO:
-    SuperRolesAdd { role: String, commands: String }, //TODO:
-    SuperRolesRevoke { role: String, commands: String }, //TODO:
-    SuperRolesAssign { username: String, role: String }, //TODO:
-    SuperRolesRecolor { role: String, color: String, force: bool }, //TODO:
+    SuperRoles,
+    SuperRolesAdd { role: String, commands: String },
+    SuperRolesRevoke { role: String, commands: String },
+    SuperRolesAssign { role: String, users: String },
+    SuperRolesRecolor { role: String, color: String },
 
     Users, //TODO:
     UsersRename { name: String }, //TODO:
@@ -505,6 +503,131 @@ pub fn parse_command(input: &str) -> Command {
         ["s", "whitelist", ..] |
         ["s", "wl", ..] => {
             let err_msg = format!("{}", "Super whitelist commands:\n> /super whitelist info\n> /super whitelist toggle\n> /super whitelist add <user1> <user2> ...\n> /super whitelist remove <user1> <user2> ...".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "roles", "list"] |
+        ["super", "r", "list"] |
+        ["s", "roles", "list"] |
+        ["s", "r", "list"] |
+        ["super", "roles", "l"] |
+        ["super", "r", "l"] |
+        ["s", "roles", "l"] |
+        ["s", "r", "l"] => Command::SuperRoles,
+
+        ["super", "roles", "list", ..] |
+        ["super", "r", "list", ..] |
+        ["s", "roles", "list", ..] |
+        ["s", "r", "list", ..] |
+        ["super", "roles", "l", ..] |
+        ["super", "r", "l", ..] |
+        ["s", "roles", "l", ..] |
+        ["s", "r", "l", ..] => {
+            let err_msg = format!("{}", "Usage:\n> /super roles list".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "roles", "add", role, commands @ ..] |
+        ["super", "r", "add", role, commands @ ..] |
+        ["s", "roles", "add", role, commands @ ..] |
+        ["s", "r", "add", role, commands @ ..] |
+        ["super", "roles", "a", role, commands @ ..] |
+        ["super", "r", "a", role, commands @ ..] |
+        ["s", "roles", "a", role, commands @ ..] |
+        ["s", "r", "a", role, commands @ ..] if !commands.is_empty() => Command::SuperRolesAdd {
+            role: role.to_string(),
+            commands: commands.join(" ")
+        },
+
+        ["super", "roles", "add", ..] |
+        ["super", "r", "add", ..] |
+        ["s", "roles", "add", ..] |
+        ["s", "r", "add", ..] |
+        ["super", "roles", "a", ..] |
+        ["super", "r", "a", ..] |
+        ["s", "roles", "a", ..] |
+        ["s", "r", "a", ..] => {
+            let err_msg = format!("{}", "Usage: /super roles add <user|mod> <command1> <command2> ...".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "roles", "revoke", role, commands @ ..] |
+        ["super", "r", "revoke", role, commands @ ..] |
+        ["s", "roles", "revoke", role, commands @ ..] |
+        ["s", "r", "revoke", role, commands @ ..] |
+        ["super", "roles", "r", role, commands @ ..] |
+        ["super", "r", "r", role, commands @ ..] |
+        ["s", "roles", "r", role, commands @ ..] |
+        ["s", "r", "r", role, commands @ ..] if !commands.is_empty() => Command::SuperRolesRevoke {
+            role: role.to_string(),
+            commands: commands.join(" ")
+        },
+
+        ["super", "roles", "revoke", ..] |
+        ["super", "r", "revoke", ..] |
+        ["s", "roles", "revoke", ..] |
+        ["s", "r", "revoke", ..] |
+        ["super", "roles", "r", ..] |
+        ["super", "r", "r", ..] |
+        ["s", "roles", "r", ..] |
+        ["s", "r", "r", ..] => {
+            let err_msg = format!("{}", "Usage: /super roles revoke <user|mod> <command1> <command2> ...".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "roles", "assign", role, users @ ..] |
+        ["super", "r", "assign", role, users @ ..] |
+        ["s", "roles", "assign", role, users @ ..] |
+        ["s", "r", "assign", role, users @ ..] |
+        ["super", "roles", "as", role, users @ ..] |
+        ["super", "r", "as", role, users @ ..] |
+        ["s", "roles", "as", role, users @ ..] |
+        ["s", "r", "as", role, users @ ..] => Command::SuperRolesAssign {
+            role: role.to_string(),
+            users: users.join(" ")
+        },
+
+        ["super", "roles", "assign", ..] |
+        ["super", "r", "assign", ..] |
+        ["s", "roles", "assign", ..] |
+        ["s", "r", "assign", ..] |
+        ["super", "roles", "as", ..] |
+        ["super", "r", "as", ..] |
+        ["s", "roles", "as", ..] |
+        ["s", "r", "as", ..] => {
+            let err_msg = format!("{}", "Usage: /super roles assign <user|mod|admin|owner> <user1> <user2> ...".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "roles", "recolor", role, color] |
+        ["super", "r", "recolor", role, color] |
+        ["s", "roles", "recolor", role, color] |
+        ["s", "r", "recolor", role, color] |
+        ["super", "roles", "rc", role, color] |
+        ["super", "r", "rc", role, color] |
+        ["s", "roles", "rc", role, color] |
+        ["s", "r", "rc", role, color] => Command::SuperRolesRecolor {
+            role: role.to_string(),
+            color: color.to_string()
+        },
+
+        ["super", "roles", "recolor", ..] |
+        ["super", "r", "recolor", ..] |
+        ["s", "roles", "recolor", ..] |
+        ["s", "r", "recolor", ..] |
+        ["super", "roles", "rc", ..] |
+        ["super", "r", "rc", ..] |
+        ["s", "roles", "rc", ..] |
+        ["s", "r", "rc", ..] => {
+            let err_msg = format!("{}", "Usage: /super roles recolor <role> <color hex>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "roles", ..] |
+        ["super", "r", ..] |
+        ["s", "roles", ..] |
+        ["s", "r", ..] => {
+            let err_msg = format!("{}", "Super roles commands:\n> /super roles list\n> /super roles add <user|mod> <command1> <command2> ...\n> /super roles revoke <user|mod> <command1> <command2> ...\n> /super roles assign <user|mod|admin|owner> <user1> <user2> ...\n> /super roles recolor <user|mod|admin|owner> <color>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 

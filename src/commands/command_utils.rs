@@ -148,10 +148,20 @@ pub fn is_user_logged_in(clients: &Clients, username: &str) -> bool {
 }
 
 pub fn check_role_permissions(role: &str, command: &str, roles: &Roles) -> bool {
+    fn granted(cmds: &[String], command: &str) -> bool {
+        if cmds.iter().any(|c| c == command) {
+            return true;
+        }
+        if let Some(parent) = command.split('.').next() {
+            return cmds.iter().any(|c| c == parent);
+        }
+        false
+    }
+
     match role {
         "owner" | "admin" => true, // full access
-        "moderator" => roles.moderator.iter().any(|c| c == command),
-        "user" => roles.user.iter().any(|c| c == command),
+        "moderator" => granted(&roles.moderator, command),
+        "user"      => granted(&roles.user, command),
         _ => false,
     }
 }

@@ -4,7 +4,7 @@ use std::collections::{HashMap};
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk};
+use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS};
 use crate::state::types::{Client, Clients, ClientState, Rooms};
 use crate::utils::{lock_client, lock_clients, lock_room, lock_rooms, lock_rooms_storage};
 use super::CommandResult;
@@ -175,6 +175,14 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 let mut client = lock_client(&client)?;
                 writeln!(client.stream, "{}", format!("{} is not currently online", recipient).yellow())?;
                 return Ok(CommandResult::Handled);
+            }
+
+            {
+                let mut client = lock_client(&client)?;
+                if client.ignore_list.contains(&recipient) {
+                    writeln!(client.stream, "{}", format!("Cannot send message to {}, you have them ignored", recipient).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
             }
 
             let clients_map = lock_clients(clients)?;
@@ -522,10 +530,70 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
+        Command::SuperRoles => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    writeln!(lock_client(&client)?.stream, "{}", format!("Room {room} not found").yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+            let room_guard = lock_room(&room_arc)?;
+
+            let mod_cmds = &room_guard.roles.moderator;
+            let user_cmds = &room_guard.roles.user;
+
+            let all_cmds: Vec<&str> = command_order()
+                .into_iter()
+                .filter(|c| RESTRICTED_COMMANDS.contains(c))
+                .collect();
+
+            let mut lines = Vec::<String>::new();
+            lines.push("Role info:".to_string());
+            lines.push("(Owners and admins can access every command)".to_string());
+
+            for cmd in all_cmds {
+                let m_disp = if mod_cmds.contains(&cmd.to_string()) {
+                    "M".bright_yellow().bold().to_string()   // orange, bold
+                } else {
+                    " ".to_string()
+                };
+
+                let u_disp = if user_cmds.contains(&cmd.to_string()) {
+                    "U".white().bold().to_string()                         // white, bold
+                } else {
+                    " ".to_string()
+                };
+
+                let indent = if cmd.contains('.') { "   " } else { "" };
+                lines.push(format!("  > {m_disp} {u_disp} {indent}{cmd}"));
+            }
+
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", lines.join("\n").green())?;
+            Ok(CommandResult::Handled)
+        }
+                
+        Command::SuperRolesAdd { role, commands } => {
+            Ok(CommandResult::Handled)
+        }
+        
+        Command::SuperRolesRevoke { role, commands } => {
+            Ok(CommandResult::Handled)
+        }
+        
+        Command::SuperRolesAssign { role, users } => {
+            Ok(CommandResult::Handled)
+        }
+        Command::SuperRolesRecolor { role, color } => {
+            Ok(CommandResult::Handled)
+        }
+
         Command::Account | Command::AccountLogout | Command::AccountEditUsername { .. } | Command::AccountEditPassword { .. } | Command::AccountImport { .. } | Command::AccountExport { .. } | Command::AccountDelete { .. } |
         Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } |
         Command::AFK | Command::Send { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
-        Command::SuperExport { .. } | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesPerms | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
+        Command::SuperExport { .. } | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
         Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
             let mut client = lock_client(&client)?;

@@ -25,6 +25,8 @@ pub type Clients = Arc<Mutex<HashMap<SocketAddr, Arc<Mutex<Client>>>>>;
 pub struct Room {
     pub whitelist_enabled: bool,
     pub whitelist: Vec<String>,
+    pub msg_rate: u8,
+    pub session_timeout: u32,
     pub roles: Roles,
     pub users: HashMap<String, RoomUser>,
     #[serde(default, skip_serializing, skip_deserializing)]
