@@ -7,42 +7,40 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use serde_json::{Serializer};
 use serde_json::ser::PrettyFormatter;
-use crate::state::types::{Clients, ClientState};
-use crate::state::types::Roles;
+use crate::types::{Clients, Client, ClientState, Rooms, Room, Roles};
 use crate::commands::parser::Command;
-use crate::state::types::{Client, Rooms};
 use crate::utils::{lock_client, lock_room, lock_rooms, lock_rooms_storage};
-use crate::state::types::Room;
 
 pub static DESCRIPTIONS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     HashMap::from([
-        ("afk",             "> /afk                Set yourself as away"),
-        ("send",            "> /send <user> <file> Send a file to the room"),
-        ("msg",             "> /msg <user> <msg>   Send a private message"),
-        ("me",              "> /me <msg>           Send an emote message"),
-        ("super",           "> /super              Administrator commands"),
-        ("super.users",     "> /super users        Show all room user data"),
-        ("super.rename",    "> /super rename       Changes room name"),
-        ("super.export",    "> /super export       Saves room data"),
-        ("super.whitelist", "> /super whitelist    Manage room whitelist"),
-        ("super.limit",     "> /super limit        Manage room rate limits"),
-        ("super.roles",     "> /super roles        Manage room roles and permissions"),
-        ("user",            "> /user               Manage user settings"),
-        ("user.list",       "> /user list          Show all visible room users"),
-        ("user.rename",     "> /user rename        Changes your name in the room"),
-        ("user.recolor",    "> /user recolor       Changes your name color in the room"),
-        ("user.ignore",     "> /user ignore        Stops messages from certain users"),
-        ("user.hide",       "> /user hide          Hides you from /user list"),
-        ("mod",             "> /mod                Use chat moderation tools"),
-        ("mod.kick",        "> /mod kick           Kick users from the chat"),
-        ("mod.mute",        "> /mod mute           Disable certain users from speaking"),
-        ("mod.ban",         "> /mod ban            Disable certain users from joining")
+        ("afk",             "> /afk              Set yourself as away"),
+        ("msg",             "> /msg <user> <msg> Send a private message"),
+        ("me",              "> /me <msg>         Send an emote message"),
+        ("seen",            "> /seen <user>      See when a user was last online"),
+        ("announce",        "> /announce <msg>   Announce a room message, bypass ignores"),
+        ("super",           "> /super            Administrator commands"),
+        ("super.users",     "> /super users      Show all room user data"),
+        ("super.rename",    "> /super rename     Changes room name"),
+        ("super.export",    "> /super export     Saves room data"),
+        ("super.whitelist", "> /super whitelist  Manage room whitelist"),
+        ("super.limit",     "> /super limit      Manage room rate limits"),
+        ("super.roles",     "> /super roles      Manage room roles and permissions"),
+        ("user",            "> /user             Manage user settings"),
+        ("user.list",       "> /user list        Show all visible room users"),
+        ("user.rename",     "> /user rename      Changes your name in the room"),
+        ("user.recolor",    "> /user recolor     Changes your name color in the room"),
+        ("user.ignore",     "> /user ignore      Stops messages from certain users"),
+        ("user.hide",       "> /user hide        Hides you from /user list"),
+        ("mod",             "> /mod              Use chat moderation tools"),
+        ("mod.kick",        "> /mod kick         Kick users from the chat"),
+        ("mod.mute",        "> /mod mute         Disable certain users from speaking"),
+        ("mod.ban",         "> /mod ban          Disable certain users from joining")
     ])
 });
 
 pub static RESTRICTED_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     HashSet::from([
-        "afk", "send", "msg", "me",
+        "afk", "msg", "me", "seen", "announce",
         "super", "super.users", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
         "user", "user.list", "user.rename", "user.recolor", "user.ignore", "user.hide",
         "mod", "mod.kick", "mod.ban", "mod.mute",
@@ -52,7 +50,7 @@ pub static RESTRICTED_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 pub fn command_order() -> Vec<&'static str> {
     vec![
         "help", "clear", "ping", "quit", "leave", "status", "ignore",
-        "afk", "send", "msg", "me",
+        "afk", "msg", "me", "seen", "announce",
         "super", "super.users", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
         "user", "user.list", "user.rename", "user.recolor", "user.ignore", "user.hide",
         "mod", "mod.kick", "mod.ban", "mod.mute"
@@ -62,34 +60,34 @@ pub fn command_order() -> Vec<&'static str> {
 pub fn always_visible() -> Vec<&'static str> {
     vec![
         "Available commands:",
-        "> /help               Show this help menu",
-        "> /clear              Clear the chat screen",
-        "> /ping               Check connection to the server",
-        "> /quit               Exit the application",
-        "> /leave              Leave your current room",
-        "> /status             Show your current room info",
-        "> /ignore             Manage ignore list"
+        "> /help             Show this help menu",
+        "> /clear            Clear the chat screen",
+        "> /ping             Check connection to the server",
+        "> /quit             Exit the application",
+        "> /leave            Leave your current room",
+        "> /status           Show your current room info",
+        "> /ignore           Manage ignore list"
     ]
 }
 
 pub fn help_msg_guest() -> &'static str {
 r#"Available commands:
-> /help               Show this help menu
-> /clear              Clear the chat screen
-> /ping               Check connection to the server
-> /quit               Exit the application
-> /account            Manage your account"#
+> /help             Show this help menu
+> /clear            Clear the chat screen
+> /ping             Check connection to the server
+> /quit             Exit the application
+> /account          Manage your account"#
 }
 
 pub fn help_msg_loggedin() -> &'static str {
 r#"Available commands:
-> /help               Show this help menu
-> /clear              Clear the chat screen
-> /ping               Check connection to the server
-> /quit               Exit the application
-> /account            Manage your account
-> /room               Manage chat rooms
-> /ignore             Manage ignore list"#
+> /help             Show this help menu
+> /clear            Clear the chat screen
+> /ping             Check connection to the server
+> /quit             Exit the application
+> /account          Manage your account
+> /room             Manage chat rooms
+> /ignore           Manage ignore list"#
 }
 
 pub fn help_msg_inroom(extra_cmds: Vec<&str>) -> String {

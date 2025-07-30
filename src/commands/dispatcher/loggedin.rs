@@ -10,7 +10,7 @@ use colored::*;
 
 use crate::commands::parser::Command;
 use crate::commands::command_utils::{help_msg_loggedin, generate_hash};
-use crate::state::types::{Client, Clients, ClientState, Room, Rooms, RoomUser};
+use crate::types::{Client, Clients, ClientState, Room, Rooms, RoomUser};
 use crate::utils::{lock_client, lock_clients, lock_users_storage, lock_rooms, lock_room, lock_rooms_storage};
 use super::CommandResult;
 
@@ -45,7 +45,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             Ok(CommandResult::Stop)
         }
 
-        Command::Leave | Command::Status | Command::DM { .. } | Command::AFK | Command::Send { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
+        Command::Leave | Command::Status | Command::AFK | Command::Announce { .. } | Command::Seen { .. } | Command::DM { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
         Command::SuperUsers | Command::SuperRename { .. } | Command::SuperExport { .. } | Command::SuperWhitelist | Command::SuperWhitelistToggle | Command::SuperWhitelistAdd { .. } | Command::SuperWhitelistRemove { .. } | Command::SuperLimit | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
         Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
@@ -384,8 +384,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 "msg_rate": 60,
                 "session_timeout": 10,
                 "roles": {
-                    "moderator": ["afk", "send", "msg", "me", "super.users", "user", "log", "mod"],
-                    "user": ["afk", "send", "msg", "me", "user", "log"],
+                    "moderator": ["afk", "seen", "msg", "me", "super.users", "user", "log", "mod"],
+                    "user": ["afk", "seen", "msg", "me", "user", "log"],
                     "colors": {
                         "owner": "#FFD700",
                         "admin": "#FF3030",
@@ -540,7 +540,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 room: name.clone(),
                 room_time: Some(SystemTime::now()),
                 msg_timestamps: VecDeque::new(),
-                inactive_time: Some(SystemTime::now())
+                inactive_time: Some(SystemTime::now()),
+                is_AFK: false
             };
 
             writeln!(client.stream, "{}", format!("Joined room: {}", name).green())?;

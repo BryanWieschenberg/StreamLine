@@ -8,15 +8,15 @@ use colored::Colorize;
 mod commands;
 use crate::commands::parser::{Command, parse_command};
 use crate::commands::dispatcher::{dispatch_command, CommandResult};
-mod state;
-use crate::state::types::{Clients, Client, ClientState, Rooms, Room};
+mod types;
+use crate::types::{Clients, Client, ClientState, Rooms, Room};
 mod utils;
 use crate::utils::{lock_clients, lock_client, lock_rooms, lock_room};
 
 pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()> {
     loop {
         // Check for inactive clients every 60 seconds
-        thread::sleep(Duration::from_secs(5)); //TODO: PUT BACK TO 60
+        thread::sleep(Duration::from_secs(60));
         let now = SystemTime::now();
 
         // Get each room's timeout

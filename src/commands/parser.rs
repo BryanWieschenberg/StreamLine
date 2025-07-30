@@ -3,14 +3,10 @@ use colored::*;
 impl ToString for Command {
     fn to_string(&self) -> String {
         match self {
+            // Not mapped to a permission since non-room commands are always available
             Command::Help | Command::Ping | Command::Quit | Command::Leave | Command::Status |
             Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } => "",
             
-            Command::AFK => "afk",
-            Command::Send { .. } => "send",
-            Command::DM { .. } => "msg",
-            Command::Me { .. } => "me",
-
             Command::Account |
             Command::AccountRegister { .. } |
             Command::AccountLogin { .. } |
@@ -26,6 +22,13 @@ impl ToString for Command {
             Command::RoomJoin { .. } |
             Command::RoomImport { .. } |
             Command::RoomDelete { .. } => "",
+
+            // Permission mappings, since these commands can be enabled/disabled for certain roles
+            Command::AFK => "afk",
+            Command::DM { .. } => "msg",
+            Command::Me { .. } => "me",
+            Command::Announce { .. } => "announce",
+            Command::Seen { .. } => "seen",
 
             Command::SuperUsers => "super.users",
             Command::SuperRename { .. } => "super.rename",
@@ -66,14 +69,15 @@ pub enum Command {
     Quit,
     Leave,
     Status,
-    IgnoreList, //TODO:
+    IgnoreList, //TODO: <-- ensure ignore works for normal msgs and /me
     IgnoreAdd { username: String }, //TODO:
     IgnoreRemove { username: String }, //TODO:
 
     AFK, //TODO:
-    Send { recipient: String, filename: String }, //TODO: <- check if ignore works for this
     DM { recipient: String, message: String },
     Me { message: String }, //TODO: <- check if ignore works for this
+    Announce { message: String }, //TODO:
+    Seen { username: String }, //TODO:
 
     Account,
     AccountRegister { username: String, password: String, confirm: String },
@@ -108,8 +112,8 @@ pub enum Command {
     SuperRolesRecolor { role: String, color: String },
 
     Users, //TODO:
-    UsersRename { name: String }, //TODO:
-    UsersRecolor { color: String }, //TODO:
+    UsersRename { name: String }, //TODO: <-- make nicknames actually work in the room now (with proper errchecks)
+    UsersRecolor { color: String }, //TODO: <-- make username colors & role prefixes + prefix colors work now
     UsersHide, //TODO:
 
     ModKick { username: String }, //TODO:
@@ -145,16 +149,6 @@ pub fn parse_command(input: &str) -> Command {
         ["msg", ..] |
         ["dm", ..] => {
             let err_msg = format!("{}", "Usage: /message <recipient> <message>".bright_blue());
-            Command::InvalidSyntax { err_msg }
-        },
-
-        ["send", recipient, filename]  => Command::Send {
-            recipient: recipient.to_string(),
-            filename: filename.to_string()
-        },
-
-        ["send", ..] => {
-            let err_msg = format!("{}", "Usage: /send <recipient> <filename>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 

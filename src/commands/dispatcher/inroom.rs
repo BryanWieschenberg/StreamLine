@@ -5,7 +5,7 @@ use colored::*;
 
 use crate::commands::parser::Command;
 use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS};
-use crate::state::types::{Client, Clients, ClientState, Rooms, RoomUser};
+use crate::types::{Client, Clients, ClientState, Rooms, RoomUser};
 use crate::utils::{lock_client, lock_clients, lock_room, lock_rooms, lock_rooms_storage};
 use super::CommandResult;
 
@@ -37,7 +37,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 "moderator" => room_guard.roles.moderator.iter().map(|s| s.as_str()).collect(),
                 "user" => room_guard.roles.user.iter().map(|s| s.as_str()).collect(),
                 "admin" | "owner" => vec![
-                    "afk", "send", "msg", "me", "super", "user", "log", "mod"
+                    "afk", "announce", "seen", "msg", "me", "super", "user", "mod"
                 ],
                 _ => Vec::new(),
             };
@@ -418,7 +418,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 room_guard.whitelist_enabled = !room_guard.whitelist_enabled;
             }
 
-            if let Ok(_room_save_lock) = crate::state::types::ROOMS_LOCK.lock() {
+            if let Ok(_store_lock) = lock_rooms_storage() {
                 let mut serializable_map = HashMap::new();
 
                 for (k, arc_mutex_room) in rooms_map.iter() {
@@ -968,7 +968,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
 
         Command::Account | Command::AccountLogout | Command::AccountEditUsername { .. } | Command::AccountEditPassword { .. } | Command::AccountImport { .. } | Command::AccountExport { .. } | Command::AccountDelete { .. } |
         Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } |
-        Command::AFK | Command::Send { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
+        Command::AFK | Command::Announce { .. } | Command::Seen { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
         Command::SuperExport { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
         Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {

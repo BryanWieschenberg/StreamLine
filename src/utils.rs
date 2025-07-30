@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::io;
 
-use crate::state::types::{Clients, Client, Rooms, Room, USERS_LOCK, ROOMS_LOCK};
+use crate::types::{Clients, Client, Rooms, Room, USERS_LOCK, ROOMS_LOCK};
 
 pub fn lock_clients(clients: &Clients) -> std::io::Result<std::sync::MutexGuard<'_, HashMap<SocketAddr, Arc<Mutex<Client>>>>> {
     clients.lock().map_err(|e| {

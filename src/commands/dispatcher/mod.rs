@@ -12,7 +12,7 @@ pub enum CommandResult {
 }
 
 use crate::commands::parser::Command;
-use crate::state::types::{Client, Clients, ClientState, Rooms};
+use crate::types::{Client, Clients, ClientState, Rooms};
 use std::io;
 
 pub fn dispatch_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms) -> io::Result<CommandResult> {
