@@ -483,7 +483,12 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 }
             };
 
-            if room.whitelist_enabled && !room.whitelist.contains(username) {
+            let is_owner = match room.users.get(username) {
+                Some(u) => u.role == "owner",
+                None => false,
+            };
+
+            if room.whitelist_enabled && !room.whitelist.contains(username) && !is_owner {
                 writeln!(lock_client(&client)?.stream, "{}", "You aren't whitelisted for this room".red())?;
                 return Ok(CommandResult::Handled);
             }
