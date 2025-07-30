@@ -1,119 +1,11 @@
 {
-    "fuckass": {
-        "whitelist_enabled": true,
-        "whitelist": [
-            "shithead",
-            "bryan"
-        ],
-        "msg_rate": 2,
-        "session_timeout": 1,
-        "roles": {
-            "moderator": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "super.users",
-                "user",
-                "mod"
-            ],
-            "user": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "user"
-            ],
-            "colors": {
-                "admin": "#FF3030",
-                "owner": "#FFD700",
-                "user": "#FFFFFF",
-                "mod": "#0080FF"
-            }
-        },
-        "users": {
-            "jeff": {
-                "nick": "",
-                "color": "",
-                "role": "user",
-                "hidden": false,
-                "muted": "",
-                "banned": ""
-            },
-            "bryan": {
-                "nick": "",
-                "color": "",
-                "role": "owner",
-                "hidden": false,
-                "muted": "",
-                "banned": ""
-            }
-        }
-    },
-    "general": {
-        "whitelist_enabled": false,
-        "whitelist": [],
-        "msg_rate": 10,
-        "session_timeout": 60,
-        "roles": {
-            "moderator": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "super",
-                "user",
-                "mod"
-            ],
-            "user": [
-                "afk",
-                "send",
-                "msg",
-                "me",
-                "user",
-                "super.users"
-            ],
-            "colors": {
-                "owner": "#FFD700",
-                "user": "#FFFFFF",
-                "mod": "#0080FF",
-                "admin": "#FF3030"
-            }
-        },
-        "users": {
-            "balls": {
-                "nick": "",
-                "color": "",
-                "role": "user",
-                "hidden": false,
-                "muted": "",
-                "banned": ""
-            },
-            "bryan": {
-                "nick": "",
-                "color": "#0080FF",
-                "role": "moderator",
-                "hidden": false,
-                "muted": "",
-                "banned": ""
-            },
-            "jeff": {
-                "nick": "",
-                "color": "",
-                "role": "user",
-                "hidden": false,
-                "muted": "",
-                "banned": ""
-            }
-        }
-    },
     "test": {
         "whitelist_enabled": true,
         "whitelist": [
             "bryan",
             "jeff"
         ],
-        "msg_rate": 5,
+        "msg_rate": 0,
         "session_timeout": 60,
         "roles": {
             "moderator": [
@@ -151,10 +43,10 @@
                 "muted": "",
                 "banned": ""
             },
-            "bruh": {
+            "shithead": {
                 "nick": "",
                 "color": "",
-                "role": "user",
+                "role": "moderator",
                 "hidden": false,
                 "muted": "",
                 "banned": ""
@@ -167,10 +59,10 @@
                 "muted": "",
                 "banned": ""
             },
-            "shithead": {
+            "bruh": {
                 "nick": "",
                 "color": "",
-                "role": "moderator",
+                "role": "user",
                 "hidden": false,
                 "muted": "",
                 "banned": ""
@@ -179,6 +71,14 @@
                 "nick": "",
                 "color": "",
                 "role": "moderator",
+                "hidden": false,
+                "muted": "",
+                "banned": ""
+            },
+            "bruh3": {
+                "nick": "",
+                "color": "",
+                "role": "admin",
                 "hidden": false,
                 "muted": "",
                 "banned": ""
@@ -198,11 +98,111 @@
                 "hidden": false,
                 "muted": "",
                 "banned": ""
-            },
-            "bruh3": {
+            }
+        }
+    },
+    "general": {
+        "whitelist_enabled": false,
+        "whitelist": [],
+        "msg_rate": 10,
+        "session_timeout": 60,
+        "roles": {
+            "moderator": [
+                "afk",
+                "send",
+                "msg",
+                "me",
+                "super",
+                "user",
+                "mod"
+            ],
+            "user": [
+                "afk",
+                "send",
+                "msg",
+                "me",
+                "user",
+                "super.users"
+            ],
+            "colors": {
+                "user": "#FFFFFF",
+                "admin": "#FF3030",
+                "mod": "#0080FF",
+                "owner": "#FFD700"
+            }
+        },
+        "users": {
+            "balls": {
                 "nick": "",
                 "color": "",
-                "role": "admin",
+                "role": "user",
+                "hidden": false,
+                "muted": "",
+                "banned": ""
+            },
+            "bryan": {
+                "nick": "",
+                "color": "#0080FF",
+                "role": "moderator",
+                "hidden": false,
+                "muted": "",
+                "banned": ""
+            },
+            "jeff": {
+                "nick": "",
+                "color": "",
+                "role": "user",
+                "hidden": false,
+                "muted": "",
+                "banned": ""
+            }
+        }
+    },
+    "fuckass": {
+        "whitelist_enabled": true,
+        "whitelist": [
+            "shithead",
+            "bryan"
+        ],
+        "msg_rate": 2,
+        "session_timeout": 1,
+        "roles": {
+            "moderator": [
+                "afk",
+                "send",
+                "msg",
+                "me",
+                "super.users",
+                "user",
+                "mod"
+            ],
+            "user": [
+                "afk",
+                "send",
+                "msg",
+                "me",
+                "user"
+            ],
+            "colors": {
+                "owner": "#FFD700",
+                "user": "#FFFFFF",
+                "admin": "#FF3030",
+                "mod": "#0080FF"
+            }
+        },
+        "users": {
+            "bryan": {
+                "nick": "",
+                "color": "",
+                "role": "owner",
+                "hidden": false,
+                "muted": "",
+                "banned": ""
+            },
+            "jeff": {
+                "nick": "",
+                "color": "",
+                "role": "user",
                 "hidden": false,
                 "muted": "",
                 "banned": ""

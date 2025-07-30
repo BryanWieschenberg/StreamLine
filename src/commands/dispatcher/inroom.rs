@@ -542,8 +542,14 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             };
             let room_guard = lock_room(&room_arc)?;
 
+            let rate_display = if room_guard.msg_rate == 0 {
+                "UNLIMITED".to_string()
+            } else {
+                format!("{}", room_guard.msg_rate)
+            };
+
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}\n  > Message rate: {} messages per 5 sec\n  > Session timeout: {} min", "Current limits:".green(), room_guard.msg_rate, room_guard.session_timeout)?;
+            writeln!(client.stream, "{}\n  > Message rate: {} messages per 5 sec\n  > Session timeout: {} min", "Current limits:".green(), format!("{}", rate_display).green(), format!("{}", room_guard.session_timeout).green())?;
             Ok(CommandResult::Handled)
         }
 
@@ -567,12 +573,19 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             }
 
             let mut client = lock_client(&client)?;
+            
             if let Err(e) = save_rooms_to_disk(&rooms_map) {
                 writeln!(client.stream, "{}", format!("Failed to save rooms: {e}").red())?;
                 return Ok(CommandResult::Handled);
             }
 
-            writeln!(client.stream, "{}", format!("Message rate limited to {new_rate} per 5s").green())?;
+            let msg = if limit == 0 {
+                "Message rate limit set to UNLIMITED".to_string()
+            } else {
+                format!("Message rate limited to {limit} per 5 sec")
+            };
+            writeln!(client.stream, "{}", msg.green())?;
+            
             Ok(CommandResult::Handled)
         }
 
