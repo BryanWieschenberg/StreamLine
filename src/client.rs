@@ -1,6 +1,6 @@
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
-use std::thread;
+use std::{env, thread};
 use colored::Colorize;
 
 // mod crypto;
@@ -25,8 +25,14 @@ fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
 
 // Main function to connect to the server and read/receive user input
 fn main() -> std::io::Result<()> {
-    let port = 8080;
-    let mut stream = TcpStream::connect(format!("127.0.0.1:{port}"))?;
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        eprintln!("Usage: client <ip:port>");
+        std::process::exit(1);
+    }
+
+    let address = &args[1];
+    let mut stream = TcpStream::connect(address)?;
     let stream_clone = stream.try_clone()?;
 
     println!("{}", "

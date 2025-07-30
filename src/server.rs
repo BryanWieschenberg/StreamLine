@@ -189,8 +189,9 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
                 {
                     let mut s = lock_client(&client_arc)?;
-                    if let ClientState::InRoom { inactive_time, .. } = &mut s.state {
-                        *inactive_time = Some(SystemTime::now());       // refresh on activity
+                    if let ClientState::InRoom { inactive_time, is_afk, .. } = &mut s.state {
+                        *inactive_time = Some(SystemTime::now());
+                        *is_afk = false;
                     }
                 }
 
@@ -252,8 +253,8 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
 // Main function to set up the TCP server and handle incoming connections
 fn main() -> std::io::Result<()> {
-    let port = 8080;
-    let listener = TcpListener::bind(format!("127.0.0.1:{port}"))?;
+    let port = 8000;
+    let listener = TcpListener::bind(format!("0.0.0.0:{port}"))?;
 
     let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
 

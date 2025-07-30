@@ -79,11 +79,11 @@ pub enum Command {
     IgnoreAdd { users: String }, //TODO:
     IgnoreRemove { users: String }, //TODO:
 
-    AFK, //TODO:
+    AFK,
     DM { recipient: String, message: String },
-    Me { message: String }, //TODO: <- check if ignore works for this
+    Me { action: String }, //TODO: <- check if ignore works for this
     Announce { message: String }, //TODO:
-    Seen { username: String }, //TODO:
+    Seen { username: String },
 
     Account,
     AccountRegister { username: String, password: String, confirm: String },
@@ -103,7 +103,7 @@ pub enum Command {
 
     SuperUsers,
     SuperRename { name: String },
-    SuperExport { filename: String }, //TODO:
+    SuperExport { filename: String },
     SuperWhitelist,
     SuperWhitelistToggle,
     SuperWhitelistAdd { users: String },
@@ -208,8 +208,8 @@ pub fn parse_command(input: &str) -> Command {
             Command::InvalidSyntax { err_msg }
         },
 
-        ["me", message @ ..] if !message.is_empty() => Command::Me {
-            message: message.join(" ")
+        ["me", action @ ..] if !action.is_empty() => Command::Me {
+            action: action.join(" ")
         },
 
         ["me", ..] => {
@@ -514,6 +514,22 @@ pub fn parse_command(input: &str) -> Command {
         ["super", "rn", ..] |
         ["s", "rn", ..] => {
             let err_msg = format!("{}", "Usage: /super rename <new room name>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["super", "export"] |
+        ["s", "export"] => Command::SuperExport {
+            filename: "".to_string()
+        },
+
+        ["super", "export", filename] |
+        ["s", "export", filename] => Command::SuperExport {
+            filename: filename.to_string()
+        },
+
+        ["super", "export", ..] |
+        ["s", "export", ..] => {
+            let err_msg = format!("{}", "Usage: /super export or /account super <filename>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 

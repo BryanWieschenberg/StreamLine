@@ -1,110 +1,77 @@
 {
-  "test": {
-    "whitelist_enabled": false,
-    "whitelist": [
-      "bryan",
-      "jeff"
-    ],
-    "msg_rate": 20,
-    "session_timeout": 0,
-    "roles": {
-      "moderator": [
-        "afk",
-        "msg",
-        "me",
-        "super.users",
-        "user",
-        "mod",
-        "super.roles"
-      ],
-      "user": [
-        "afk",
-        "msg",
-        "me",
-        "user",
-        "super.rename",
-        "super.export"
-      ],
-      "colors": {
-        "owner": "#FFBB00",
-        "admin": "#FF3030",
-        "mod": "#0080FF",
-        "user": "#FFCCCC"
-      }
-    },
-    "users": {
-      "bruh3": {
-        "nick": "",
-        "color": "",
-        "role": "admin",
-        "hidden": false,
-        "muted": "",
-        "banned": "",
-        "last_seen": 0
-      },
-      "super.roless": {
-        "nick": "",
-        "color": "",
-        "role": "moderator",
-        "hidden": false,
-        "muted": "",
-        "banned": "",
-        "last_seen": 0
-      },
-      "super.roles": {
-        "nick": "",
-        "color": "",
-        "role": "moderator",
-        "hidden": false,
-        "muted": "",
-        "banned": "",
-        "last_seen": 0
-      },
-      "bryan": {
-        "nick": "",
-        "color": "",
-        "role": "admin",
-        "hidden": false,
-        "muted": "",
-        "banned": "",
-        "last_seen": 1753904774
-      },
-      "bruh2": {
-        "nick": "",
-        "color": "",
-        "role": "admin",
-        "hidden": false,
-        "muted": "",
-        "banned": "",
-        "last_seen": 0
-      },
-      "bruh": {
-        "nick": "",
-        "color": "",
-        "role": "user",
-        "hidden": false,
-        "muted": "",
-        "banned": "",
-        "last_seen": 0
-      },
-      "jeff": {
-        "nick": "",
-        "color": "",
-        "role": "admin",
-        "hidden": false,
-        "muted": "",
-        "banned": "",
-        "last_seen": 1753904581
-      },
-      "shithead": {
-        "nick": "",
-        "color": "",
-        "role": "moderator",
-        "hidden": false,
-        "muted": "",
-        "banned": "",
-        "last_seen": 0
-      }
+    "test": {
+        "msg_rate": 20,
+        "roles": {
+            "colors": {
+                "admin": "#FF3030",
+                "mod": "#0080FF",
+                "owner": "#FFBB00",
+                "user": "#FFCCCC"
+            },
+            "moderator": [
+                "afk",
+                "msg",
+                "me",
+                "super.users",
+                "user",
+                "mod",
+                "super.roles"
+            ],
+            "user": [
+                "afk",
+                "msg",
+                "me",
+                "user",
+                "super.rename",
+                "super.export"
+            ]
+        },
+        "session_timeout": 0,
+        "users": {
+            "bryan": {
+                "color": "",
+                "hidden": false,
+                "last_seen": 1753906896,
+                "nick": "",
+                "role": "admin",
+                "banned": 0,
+                "ban_length": 0,
+                "ban_reason": "",
+                "muted": 0,
+                "mute_length": 0,
+                "mute_reason": ""
+            },
+            "jeff": {
+                "color": "",
+                "hidden": false,
+                "last_seen": 1753904581,
+                "nick": "",
+                "role": "admin",
+                "banned": 0,
+                "ban_length": 0,
+                "ban_reason": "",
+                "muted": 0,
+                "mute_length": 0,
+                "mute_reason": ""
+            },
+            "shithead": {
+                "color": "",
+                "hidden": false,
+                "last_seen": 0,
+                "nick": "",
+                "role": "moderator",
+                "banned": 0,
+                "ban_length": 0,
+                "ban_reason": "",
+                "muted": 0,
+                "mute_length": 0,
+                "mute_reason": ""
+            }
+        },
+        "whitelist": [
+            "bryan",
+            "jeff"
+        ],
+        "whitelist_enabled": false
     }
-  }
 }

@@ -248,11 +248,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             };
 
             let export_path = format!("data/logs/users/{}", final_filename);
-            let export_file = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(&export_path)?;
+            let export_file = OpenOptions::new().create(true).write(true).truncate(true).open(&export_path)?;
 
             let mut writer = std::io::BufWriter::new(export_file);
             let formatter = PrettyFormatter::with_indent(b"    ");
@@ -502,9 +498,13 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                     color: "".to_string(),
                     role: "user".to_string(),
                     hidden: false,
-                    muted: "".to_string(),
-                    banned: "".to_string(),
-                    last_seen: 0
+                    last_seen: 0,
+                    banned: 0,
+                    ban_length: 0,
+                    ban_reason: "".to_string(),
+                    muted: 0,
+                    mute_length: 0,
+                    mute_reason: "".to_string()
                 });
 
                 let file = File::open("data/rooms.json")?;
@@ -517,9 +517,13 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                         "color": "",
                         "role": "user",
                         "hidden": false,
-                        "muted": "",
-                        "banned": "",
-                        "last_seen": 0
+                        "last_seen": 0,
+                        "banned": 0,
+                        "ban_length": 0,
+                        "ban_reason": "",
+                        "muted": 0,
+                        "mute_length": 0,
+                        "mute_reason": ""
                     });
 
                     let file = OpenOptions::new().write(true).truncate(true).open("data/rooms.json")?;
