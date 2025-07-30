@@ -4,7 +4,9 @@ use sha2::{Sha256, Digest};
 use colored::Colorize;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
-use std::fs::write;
+use serde::Serialize;
+use serde_json::{Serializer};
+use serde_json::ser::PrettyFormatter;
 use crate::state::types::{Clients, ClientState};
 use crate::state::types::Roles;
 use crate::commands::parser::Command;
@@ -205,18 +207,19 @@ pub fn has_permission(cmd: &Command, client: Arc<Mutex<Client>>, rooms: &Rooms, 
 pub fn save_rooms_to_disk(map: &HashMap<String, Arc<Mutex<Room>>>) -> std::io::Result<()> {
     let _lock = lock_rooms_storage()?; // handle poisoned lock gracefully
 
-    let mut serializable_map = HashMap::new();
-    for (k, arc_mutex_room) in map.iter() {
-        match lock_room(arc_mutex_room) {
-            Ok(room_guard) => {
-                serializable_map.insert(k.clone(), room_guard.clone());
-            }
-            Err(e) => {
-                eprintln!("Failed to lock room '{}': {}", k, e);
-            }
+    let mut snapshot = HashMap::new();
+    for (name, arc) in map.iter() {
+        if let Ok(room) = arc.lock() {
+            snapshot.insert(name.clone(), room.clone());     // online_users skipped by serde
+        } else {
+            eprintln!("Failed to lock room '{}'", name);
         }
     }
+    let file = std::fs::OpenOptions::new().create(true).write(true).truncate(true).open("data/rooms.json")?;
+    let mut writer = std::io::BufWriter::new(file);
+    let formatter = PrettyFormatter::with_indent(b"    ");
+    let mut ser = Serializer::with_formatter(&mut writer, formatter);
+    snapshot.serialize(&mut ser).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-    let json = serde_json::to_string_pretty(&serializable_map)?;
-    write("data/rooms.json", json)
+    Ok(())
 }

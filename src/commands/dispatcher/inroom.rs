@@ -1,11 +1,11 @@
-use std::io::{self, Write};
+use std::io::{self, BufRead, Write};
 use std::sync::{Arc, Mutex};
 use std::collections::{HashMap};
 use colored::*;
 
 use crate::commands::parser::Command;
 use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS};
-use crate::state::types::{Client, Clients, ClientState, Rooms};
+use crate::state::types::{Client, Clients, ClientState, Rooms, RoomUser};
 use crate::utils::{lock_client, lock_clients, lock_room, lock_rooms, lock_rooms_storage};
 use super::CommandResult;
 
@@ -581,7 +581,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 "mod" | "moderator" => "moderator",
                 _ => {
                     let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", "Error: role must be user|mod".yellow())?;
+                    writeln!(client.stream, "{}", "Error: Role must be user|mod".yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             };
@@ -646,7 +646,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 "mod" | "moderator" => "moderator",
                 _ => {
                     let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", "Error: role must be user|mod".yellow())?;
+                    writeln!(client.stream, "{}", "Error: Role must be user|mod".yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             };
@@ -706,9 +706,168 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         }
         
         Command::SuperRolesAssign { role, users } => {
+            let target_role = match role.to_lowercase().as_str() {
+                "user" => "user",
+                "mod" | "moderator" => "moderator",
+                "admin" => "admin",
+                "owner" => "owner",
+                _ => {
+                    writeln!(lock_client(&client)?.stream, "{}", "Error: Role must be user|mod|admin|owner".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let users_vec: Vec<&str> = users.split_whitespace().collect();
+            if users_vec.is_empty() {
+                writeln!(lock_client(&client)?.stream, "{}", "Error: No users specified".yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            if target_role == "owner" {
+                if users_vec.len() != 1 {
+                    writeln!(lock_client(&client)?.stream, "{}", "Error: Only 1 user may be assigned to owner".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            }
+
+            let mut assigned = Vec::<String>::new();
+            {
+                let _store_lock = lock_rooms_storage()?;
+                let rooms_map   = lock_rooms(rooms)?;
+                let room_arc    = match rooms_map.get(room) {
+                    Some(r) => Arc::clone(r),
+                    None => {
+                        writeln!(lock_client(&client)?.stream, "{}", format!("Room {room} not found").yellow())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                };
+                let mut room_guard = lock_room(&room_arc)?;
+
+                if target_role == "owner" {
+                    match room_guard.users.get(username) {
+                        Some(u) if u.role == "owner" => (),
+                        _ => {
+                            writeln!(lock_client(&client)?.stream, "{}", "Error: Only the room owner can transfer ownership".yellow())?;
+                            return Ok(CommandResult::Handled);
+                        }
+                    }
+                }
+
+                let new_owner = users_vec[0];
+                if target_role == "owner" {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Assigning {new_owner} as owner will transfer room ownership to them. Are you sure you want to do this? (y/n): ").red())?;
+                    let mut reader = std::io::BufReader::new(client.stream.try_clone()?);
+                    loop {
+                        let mut line = String::new();
+                        let bytes = reader.read_line(&mut line)?;
+                        if bytes == 0 {
+                            writeln!(client.stream, "{}", "Connection closed".yellow())?;
+                            return Ok(CommandResult::Stop);
+                        }
+                        match line.trim().to_lowercase().as_str() {
+                            "y" => break,
+                            "n" => {
+                                writeln!(client.stream, "{}", "Owner transfer cancelled".yellow())?;
+                                return Ok(CommandResult::Handled);
+                            }
+                            _ => {
+                                writeln!(client.stream, "{}", "(y/n): ".red())?;
+                            }
+                        }
+                    }
+                }
+
+                for &u in &users_vec {
+                    let entry = room_guard.users.entry(u.to_string()).or_insert(RoomUser {
+                        nick: "".to_string(),
+                        color: "".to_string(),
+                        role: "user".to_string(),
+                        hidden: false,
+                        muted: "".to_string(),
+                        banned: "".to_string()
+                    });
+                    if entry.role != target_role {
+                        entry.role = target_role.to_string();
+                        assigned.push(u.to_string());
+                    }
+                }
+
+                if new_owner != username {
+                    if let Some(cur_owner) = room_guard.users.get_mut(username) {
+                        if cur_owner.role == "owner" {
+                            cur_owner.role = "admin".to_string();
+                        }
+                    }
+                }
+
+                for &u in &users_vec {
+                    if !assigned.contains(&u.to_string()) {
+                    }
+                }
+            }
+
+            if !assigned.is_empty() {
+                let rooms_map = lock_rooms(rooms)?;
+                if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                    writeln!(lock_client(&client)?.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            }
+
+            let mut client = lock_client(&client)?;
+            if assigned.is_empty() {
+                writeln!(client.stream, "{}", "No role changes made".yellow())?;
+            } else {
+                writeln!(client.stream, "{}", format!("Assigned role '{target_role}' to: {}", assigned.join(", ")).green())?;
+            }
+
             Ok(CommandResult::Handled)
         }
+
         Command::SuperRolesRecolor { role, color } => {
+            let role_key = match role.to_lowercase().as_str() {
+                "user"        => "user",
+                "mod" | "moderator" => "mod",
+                "admin"       => "admin",
+                "owner"       => "owner",
+                _ => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Role must be user|mod|admin|owner".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let hex = color.trim().trim_start_matches('#');
+            if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                writeln!(lock_client(&client)?.stream, "{}", "Error: Color must be a 6‑digit hex value".yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+            let hex_with_hash = format!("#{hex}");
+
+            {
+                let _store_lock = lock_rooms_storage()?;
+                let rooms_map   = lock_rooms(rooms)?;
+                let room_arc    = match rooms_map.get(room) {
+                    Some(r) => Arc::clone(r),
+                    None => {
+                        writeln!(lock_client(&client)?.stream, "{}", format!("Room {room} not found").yellow())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                };
+                let mut room_guard = lock_room(&room_arc)?;
+                room_guard.roles.colors.insert(role_key.to_string(), hex_with_hash.clone());
+            }
+
+            let rooms_map = lock_rooms(rooms)?;
+            let mut client = lock_client(&client)?;
+            
+            if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                writeln!(client.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            writeln!(client.stream, "{} {}", format!("Color for {role_key} role changed to").green(), hex_with_hash.clone().truecolor_from_hex(&hex_with_hash))?;
             Ok(CommandResult::Handled)
         }
 
