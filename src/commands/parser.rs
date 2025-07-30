@@ -4,8 +4,14 @@ impl ToString for Command {
     fn to_string(&self) -> String {
         match self {
             // Not mapped to a permission since non-room commands are always available
-            Command::Help | Command::Ping | Command::Quit | Command::Leave | Command::Status |
-            Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } => "",
+            Command::Help |
+            Command::Ping |
+            Command::Quit |
+            Command::Leave |
+            Command::Status |
+            Command::IgnoreList |
+            Command::IgnoreAdd { .. } |
+            Command::IgnoreRemove { .. } => "",
             
             Command::Account |
             Command::AccountRegister { .. } |
@@ -46,10 +52,10 @@ impl ToString for Command {
             Command::SuperRolesAssign { .. } => "super.roles",
             Command::SuperRolesRecolor { .. } => "super.roles",
             
-            Command::Users => "users",
-            Command::UsersRename { .. } => "users.rename",
-            Command::UsersRecolor { .. } => "users.color",
-            Command::UsersHide => "users.hide",
+            Command::Users => "user.list",
+            Command::UsersRename { .. } => "user.rename",
+            Command::UsersRecolor { .. } => "user.color",
+            Command::UsersHide => "user.hide",
 
             Command::ModKick { .. } => "mod.kick",
             Command::ModMute { .. } => "mod.mute",
@@ -70,8 +76,8 @@ pub enum Command {
     Leave,
     Status,
     IgnoreList, //TODO: <-- ensure ignore works for normal msgs and /me
-    IgnoreAdd { username: String }, //TODO:
-    IgnoreRemove { username: String }, //TODO:
+    IgnoreAdd { users: String }, //TODO:
+    IgnoreRemove { users: String }, //TODO:
 
     AFK, //TODO:
     DM { recipient: String, message: String },
@@ -136,6 +142,56 @@ pub fn parse_command(input: &str) -> Command {
         ["quit"] | ["exit"] | ["q"] | ["e"] => Command::Quit,
         ["leave"] => Command::Leave,
         ["status"] => Command::Status,
+
+        ["ignore", "list"] |
+        ["ignore", "l"] |
+        ["i", "list"] |
+        ["i", "l"] => Command::IgnoreList,
+
+        ["ignore", "list", ..] |
+        ["ignore", "l", ..] |
+        ["i", "list", ..] |
+        ["i", "l", ..] => {
+            let err_msg = format!("{}", "Usage: /ignore list".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["ignore", "add", users @ ..] |
+        ["ignore", "a", users @ ..] |
+        ["i", "add", users @ ..] |
+        ["i", "a", users @ ..] if !users.is_empty() => Command::IgnoreAdd {
+            users: users.join(" ")
+        },
+
+        ["ignore", "add", ..] |
+        ["ignore", "a", ..] |
+        ["i", "add", ..] |
+        ["i", "a", ..] => {
+            let err_msg = format!("{}", "Usage: /ignore add <user1> <user2> ...".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["ignore", "remove", users @ ..] |
+        ["ignore", "r", users @ ..] |
+        ["i", "remove", users @ ..] |
+        ["i", "r", users @ ..] if !users.is_empty() => Command::IgnoreRemove {
+            users: users.join(" ")
+        },
+
+        ["ignore", "remove", ..] |
+        ["ignore", "r", ..] |
+        ["i", "remove", ..] |
+        ["i", "r", ..] => {
+            let err_msg = format!("{}", "Usage: /ignore remove <user1> <user2> ...".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["ignore", ..] |
+        ["i", ..] => {
+            let err_msg = format!("{}", "Ignore commands:\n> /ignore list\n> /ignore add <user1> <user2> ...\n> /ignore remove <user1> <user2> ...".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
         ["afk"] => Command::AFK,
 
         ["message", recipient, message @ ..] |
@@ -151,6 +207,37 @@ pub fn parse_command(input: &str) -> Command {
             let err_msg = format!("{}", "Usage: /message <recipient> <message>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
+
+        ["me", message @ ..] if !message.is_empty() => Command::Me {
+            message: message.join(" ")
+        },
+
+        ["me", ..] => {
+            let err_msg = format!("{}", "Usage: /me <action>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["seen", username] => Command::Seen {
+            username: username.to_string()
+        },
+
+        ["seen", ..] => {
+            let err_msg = format!("{}", "Usage: /seen <username>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["announce", message @ ..] if !message.is_empty() => Command::Announce {
+            message: message.join(" ")
+        },
+
+        ["announce", ..] => {
+            let err_msg = format!("{}", "Usage: /announce <message>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        // Me { message: String }, //TODO: <- check if ignore works for this
+        // Announce { message: String }, //TODO:
+        // Seen { username: String }, //TODO:
 
         ["account", "register", username, password, confirm_password] |
         ["a", "register", username, password, confirm_password] |
@@ -594,7 +681,7 @@ pub fn parse_command(input: &str) -> Command {
         ["s", "limit", ..] |
         ["super", "l", ..] |
         ["s", "l", ..] => {
-            let err_msg = format!("{}", "Super limit commands:\n> /super limit info\n> /super limit rate <limit secs (1-255) | *>\n/super limit session <limit secs (1-4294967295) | *>".bright_blue());
+            let err_msg = format!("{}", "Super limit commands:\n> /super limit info\n> /super limit rate <limit secs (1-255) | *>\n> /super limit session <limit secs (1-4294967295) | *>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 

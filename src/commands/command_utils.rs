@@ -4,6 +4,7 @@ use sha2::{Sha256, Digest};
 use colored::Colorize;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use serde_json::{Serializer};
 use serde_json::ser::PrettyFormatter;
@@ -29,7 +30,6 @@ pub static DESCRIPTIONS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
         ("user.list",       "> /user list        Show all visible room users"),
         ("user.rename",     "> /user rename      Changes your name in the room"),
         ("user.recolor",    "> /user recolor     Changes your name color in the room"),
-        ("user.ignore",     "> /user ignore      Stops messages from certain users"),
         ("user.hide",       "> /user hide        Hides you from /user list"),
         ("mod",             "> /mod              Use chat moderation tools"),
         ("mod.kick",        "> /mod kick         Kick users from the chat"),
@@ -42,7 +42,7 @@ pub static RESTRICTED_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     HashSet::from([
         "afk", "msg", "me", "seen", "announce",
         "super", "super.users", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
-        "user", "user.list", "user.rename", "user.recolor", "user.ignore", "user.hide",
+        "user", "user.list", "user.rename", "user.recolor", "user.hide",
         "mod", "mod.kick", "mod.ban", "mod.mute",
     ])
 });
@@ -52,7 +52,7 @@ pub fn command_order() -> Vec<&'static str> {
         "help", "clear", "ping", "quit", "leave", "status", "ignore",
         "afk", "msg", "me", "seen", "announce",
         "super", "super.users", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
-        "user", "user.list", "user.rename", "user.recolor", "user.ignore", "user.hide",
+        "user", "user.list", "user.rename", "user.recolor", "user.hide",
         "mod", "mod.kick", "mod.ban", "mod.mute"
     ]
 }
@@ -218,6 +218,47 @@ pub fn save_rooms_to_disk(map: &HashMap<String, Arc<Mutex<Room>>>) -> std::io::R
     let formatter = PrettyFormatter::with_indent(b"    ");
     let mut ser = Serializer::with_formatter(&mut writer, formatter);
     snapshot.serialize(&mut ser).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    Ok(())
+}
+
+pub fn unix_timestamp(rooms: &Rooms, room_name: &str, username: &str) -> io::Result<()> {
+    let ts: u64 = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(dur) => dur.as_secs(),
+        Err(_)  => 0,
+    };
+
+    {
+        let rooms_map = lock_rooms(rooms)?;
+        if let Some(room_arc) = rooms_map.get(room_name) {
+            if let Ok(mut room_guard) = lock_room(room_arc) {
+                if let Some(entry) = room_guard.users.get_mut(username) {
+                    entry.last_seen = ts;
+                } else {
+                    return Ok(()); // User not found, nothing to do
+                }
+            } else {
+                return Ok(()); // Failed to lock room, skip
+            }
+        } else {
+            return Ok(()); // Room not found
+        }
+    }
+
+    {
+        let _store_lock = lock_rooms_storage()?;
+        let rooms_map   = lock_rooms(rooms)?;
+
+        let mut serialisable = std::collections::HashMap::new();
+        for (name, arc) in rooms_map.iter() {
+            if let Ok(room) = arc.lock() {
+                serialisable.insert(name.clone(), room.clone());
+            }
+        }
+
+        let json = serde_json::to_string_pretty(&serialisable)?;
+        std::fs::write("data/rooms.json", json)?;
+    }
 
     Ok(())
 }

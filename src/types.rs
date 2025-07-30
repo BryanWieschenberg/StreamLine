@@ -15,7 +15,7 @@ pub enum ClientState {
         room_time: Option<std::time::SystemTime>,
         msg_timestamps: VecDeque<Instant>,
         inactive_time: Option<std::time::SystemTime>,
-        is_AFK: bool
+        is_afk: bool
     }
 }
 
@@ -55,6 +55,7 @@ pub struct RoomUser {
     pub hidden: bool,
     pub muted: String,
     pub banned: String,
+    pub last_seen: u64
 }
 
 pub type Rooms = Arc<Mutex<HashMap<String, Arc<Mutex<Room>>>>>;

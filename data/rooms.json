@@ -1,59 +1,4 @@
 {
-  "general": {
-    "whitelist_enabled": false,
-    "whitelist": [],
-    "msg_rate": 10,
-    "session_timeout": 60,
-    "roles": {
-      "moderator": [
-        "afk",
-        "msg",
-        "me",
-        "super",
-        "user",
-        "mod"
-      ],
-      "user": [
-        "afk",
-        "msg",
-        "me",
-        "user",
-        "super.users"
-      ],
-      "colors": {
-        "owner": "#FFD700",
-        "admin": "#FF3030",
-        "mod": "#0080FF",
-        "user": "#FFFFFF"
-      }
-    },
-    "users": {
-      "balls": {
-        "nick": "",
-        "color": "",
-        "role": "user",
-        "hidden": false,
-        "muted": "",
-        "banned": ""
-      },
-      "bryan": {
-        "nick": "",
-        "color": "#0080FF",
-        "role": "moderator",
-        "hidden": false,
-        "muted": "",
-        "banned": ""
-      },
-      "jeff": {
-        "nick": "",
-        "color": "",
-        "role": "user",
-        "hidden": false,
-        "muted": "",
-        "banned": ""
-      }
-    }
-  },
   "test": {
     "whitelist_enabled": false,
     "whitelist": [
@@ -82,19 +27,20 @@
       ],
       "colors": {
         "owner": "#FFBB00",
+        "admin": "#FF3030",
         "mod": "#0080FF",
-        "user": "#FFCCCC",
-        "admin": "#FF3030"
+        "user": "#FFCCCC"
       }
     },
     "users": {
-      "bruh2": {
+      "bruh3": {
         "nick": "",
         "color": "",
         "role": "admin",
         "hidden": false,
         "muted": "",
-        "banned": ""
+        "banned": "",
+        "last_seen": 0
       },
       "super.roless": {
         "nick": "",
@@ -102,23 +48,8 @@
         "role": "moderator",
         "hidden": false,
         "muted": "",
-        "banned": ""
-      },
-      "shithead": {
-        "nick": "",
-        "color": "",
-        "role": "moderator",
-        "hidden": false,
-        "muted": "",
-        "banned": ""
-      },
-      "bruh": {
-        "nick": "",
-        "color": "",
-        "role": "user",
-        "hidden": false,
-        "muted": "",
-        "banned": ""
+        "banned": "",
+        "last_seen": 0
       },
       "super.roles": {
         "nick": "",
@@ -126,7 +57,8 @@
         "role": "moderator",
         "hidden": false,
         "muted": "",
-        "banned": ""
+        "banned": "",
+        "last_seen": 0
       },
       "bryan": {
         "nick": "",
@@ -134,72 +66,44 @@
         "role": "admin",
         "hidden": false,
         "muted": "",
-        "banned": ""
+        "banned": "",
+        "last_seen": 1753904774
       },
-      "bruh3": {
+      "bruh2": {
         "nick": "",
         "color": "",
         "role": "admin",
         "hidden": false,
         "muted": "",
-        "banned": ""
+        "banned": "",
+        "last_seen": 0
       },
-      "jeff": {
-        "nick": "",
-        "color": "",
-        "role": "admin",
-        "hidden": false,
-        "muted": "",
-        "banned": ""
-      }
-    }
-  },
-  "fuckass": {
-    "whitelist_enabled": true,
-    "whitelist": [
-      "shithead",
-      "bryan"
-    ],
-    "msg_rate": 2,
-    "session_timeout": 1,
-    "roles": {
-      "moderator": [
-        "afk",
-        "msg",
-        "me",
-        "super.users",
-        "user",
-        "mod"
-      ],
-      "user": [
-        "afk",
-        "msg",
-        "me",
-        "user"
-      ],
-      "colors": {
-        "admin": "#FF3030",
-        "user": "#FFFFFF",
-        "owner": "#FFD700",
-        "mod": "#0080FF"
-      }
-    },
-    "users": {
-      "bryan": {
-        "nick": "",
-        "color": "",
-        "role": "owner",
-        "hidden": false,
-        "muted": "",
-        "banned": ""
-      },
-      "jeff": {
+      "bruh": {
         "nick": "",
         "color": "",
         "role": "user",
         "hidden": false,
         "muted": "",
-        "banned": ""
+        "banned": "",
+        "last_seen": 0
+      },
+      "jeff": {
+        "nick": "",
+        "color": "",
+        "role": "admin",
+        "hidden": false,
+        "muted": "",
+        "banned": "",
+        "last_seen": 1753904581
+      },
+      "shithead": {
+        "nick": "",
+        "color": "",
+        "role": "moderator",
+        "hidden": false,
+        "muted": "",
+        "banned": "",
+        "last_seen": 0
       }
     }
   }

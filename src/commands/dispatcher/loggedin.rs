@@ -384,8 +384,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 "msg_rate": 60,
                 "session_timeout": 10,
                 "roles": {
-                    "moderator": ["afk", "seen", "msg", "me", "super.users", "user", "log", "mod"],
-                    "user": ["afk", "seen", "msg", "me", "user", "log"],
+                    "moderator": ["afk", "seen", "msg", "me", "super.users", "user", "mod"],
+                    "user": ["afk", "seen", "msg", "me", "user"],
                     "colors": {
                         "owner": "#FFD700",
                         "admin": "#FF3030",
@@ -503,7 +503,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                     role: "user".to_string(),
                     hidden: false,
                     muted: "".to_string(),
-                    banned: "".to_string()
+                    banned: "".to_string(),
+                    last_seen: 0
                 });
 
                 let file = File::open("data/rooms.json")?;
@@ -517,7 +518,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                         "role": "user",
                         "hidden": false,
                         "muted": "",
-                        "banned": ""
+                        "banned": "",
+                        "last_seen": 0
                     });
 
                     let file = OpenOptions::new().write(true).truncate(true).open("data/rooms.json")?;
@@ -541,7 +543,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 room_time: Some(SystemTime::now()),
                 msg_timestamps: VecDeque::new(),
                 inactive_time: Some(SystemTime::now()),
-                is_AFK: false
+                is_afk: false
             };
 
             writeln!(client.stream, "{}", format!("Joined room: {}", name).green())?;

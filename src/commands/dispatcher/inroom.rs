@@ -1,10 +1,11 @@
 use std::io::{self, BufRead, Write};
 use std::sync::{Arc, Mutex};
 use std::collections::{HashMap};
+use std::time::{SystemTime, UNIX_EPOCH};
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS};
+use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS, unix_timestamp};
 use crate::types::{Client, Clients, ClientState, Rooms, RoomUser};
 use crate::utils::{lock_client, lock_clients, lock_room, lock_rooms, lock_rooms_storage};
 use super::CommandResult;
@@ -60,12 +61,17 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             };
 
             {
-                let rooms = lock_rooms(rooms)?;
-                if let Some(room_arc) = rooms.get(room) {
+                let rooms_map = lock_rooms(rooms)?;
+                if let Some(room_arc) = rooms_map.get(room) {
                     if let Ok(mut room_guard) = room_arc.lock() {
                         room_guard.online_users.retain(|u| u != username);
                     }
                 }
+            }
+
+            // Get current unix time and update client's last_seen value for their current room
+            if let Err(e) = unix_timestamp(rooms, room, username) {
+                eprintln!("Error updating last_seen for {username} in {room}: {e}");
             }
 
             {
@@ -87,6 +93,11 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                         room.online_users.retain(|u| u != username);
                     }
                 }
+            }
+
+            // Get current unix time and update client's last_seen value for their current room
+            if let Err(e) = unix_timestamp(rooms, room, username) {
+                eprintln!("Error updating last_seen for {username} in {room}: {e}");
             }
 
             let mut client = lock_client(&client)?;
@@ -223,6 +234,49 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
+        Command::Seen { username } => { 
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Room not found".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+            let room_guard = lock_room(&room_arc)?;
+
+            let is_online = room_guard.online_users.iter().any(|u| u == &username);
+
+            let response = if is_online {
+                format!("{username} is online now").green().to_string()
+            } else {
+                match room_guard.users.get(&username) {
+                    Some(info) => {
+                        let now_secs = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                            Ok(d)  => d.as_secs(),
+                            Err(_) => 0,
+                        };
+                        let diff = now_secs.saturating_sub(info.last_seen); // last_seen is u64
+
+                        let days = diff / 86_400;
+                        let hrs  = (diff % 86_400) / 3_600;
+                        let mins = (diff % 3_600) / 60;
+                        let secs = diff % 60;
+
+                        format!(
+                            "{username} was last seen {}d {}h {}m {}s ago",
+                            days, hrs, mins, secs
+                        ).green().to_string()
+                    }
+                    None => format!("{username} has never joined this room").yellow().to_string(),
+                }
+            };
+
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{response}")?;
+            Ok(CommandResult::Handled)
+        }
         Command::AccountRegister { .. } | Command::AccountLogin { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Already logged in".yellow())?;
@@ -880,7 +934,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                         role: "user".to_string(),
                         hidden: false,
                         muted: "".to_string(),
-                        banned: "".to_string()
+                        banned: "".to_string(),
+                        last_seen: 0
                     });
                     if entry.role != target_role {
                         entry.role = target_role.to_string();
@@ -968,7 +1023,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
 
         Command::Account | Command::AccountLogout | Command::AccountEditUsername { .. } | Command::AccountEditPassword { .. } | Command::AccountImport { .. } | Command::AccountExport { .. } | Command::AccountDelete { .. } |
         Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } |
-        Command::AFK | Command::Announce { .. } | Command::Seen { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
+        Command::AFK | Command::Announce { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
         Command::SuperExport { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
         Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {

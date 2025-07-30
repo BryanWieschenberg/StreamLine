@@ -8,6 +8,7 @@ use colored::Colorize;
 mod commands;
 use crate::commands::parser::{Command, parse_command};
 use crate::commands::dispatcher::{dispatch_command, CommandResult};
+use crate::commands::command_utils::{unix_timestamp};
 mod types;
 use crate::types::{Clients, Client, ClientState, Rooms, Room};
 mod utils;
@@ -16,7 +17,7 @@ use crate::utils::{lock_clients, lock_client, lock_rooms, lock_room};
 pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()> {
     loop {
         // Check for inactive clients every 60 seconds
-        thread::sleep(Duration::from_secs(60));
+        thread::sleep(Duration::from_secs(1));
         let now = SystemTime::now();
 
         // Get each room's timeout
@@ -42,14 +43,24 @@ pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()
         // Evaluate each client for inactivity
         for client_arc in client_arcs {
             if let Ok(mut client) = client_arc.lock() {
-                if let ClientState::InRoom { username, room, room_time, .. } = &mut client.state {
-                    let timeout = *room_timeouts.get(room).unwrap_or(&0);
+                if let ClientState::InRoom { username, room, inactive_time, .. } = &mut client.state {
+                    let timeout = match room_timeouts.get(room) {
+                        Some(t) => *t,
+                        None => 0,
+                    };
                     if timeout == 0 { continue; } // Unlimited session time for that room
 
-                    let last = room_time.unwrap_or(now);
-                    if now.duration_since(last)
-                          .unwrap_or_default()
-                          .as_secs() >= timeout as u64
+                    let last_seen = match inactive_time {
+                        Some(t) => *t,
+                        None => now,
+                    };
+
+                    let idle_secs = match now.duration_since(last_seen) {
+                        Ok(d)  => d.as_secs(),
+                        Err(_) => 0,
+                    };
+
+                    if idle_secs >= timeout as u64
                     {
                         // Kick to lobby
                         let user = username.clone();
@@ -57,6 +68,21 @@ pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()
 
                         client.state = ClientState::LoggedIn { username: user.clone() };
                         writeln!(client.stream, "{}", "Session timed out, returned to lobby".yellow())?;
+                        drop(client);
+
+                        {
+                            let rooms_map = lock_rooms(&rooms)?;
+                            if let Some(room_arc) = rooms_map.get(&room_name) {
+                                if let Ok(mut r) = room_arc.lock() {
+                                    r.online_users.retain(|u| u != &user);   // ← remove from list
+                                }
+                            }
+                        }
+
+                        // Get current unix time and update client's last_seen value for their current room
+                        if let Err(e) = unix_timestamp(&rooms, &room_name, &user) {
+                            eprintln!("Error updating last_seen for {user} in {room_name}: {e}");
+                        }
 
                         println!("Auto-kicked {user} from {room_name} for inactivity");
                     }
@@ -231,8 +257,8 @@ fn main() -> std::io::Result<()> {
 
     let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
 
-    let room_file: std::fs::File = std::fs::File::open("data/rooms.json")?;
-    let room_reader: BufReader<std::fs::File> = BufReader::new(room_file);
+    let room_file = std::fs::File::open("data/rooms.json")?;
+    let room_reader = BufReader::new(room_file);
     let parsed_rooms: HashMap<String, Room> = serde_json::from_reader(room_reader)?;
 
     // Convert into Arc<Mutex<Room>>
