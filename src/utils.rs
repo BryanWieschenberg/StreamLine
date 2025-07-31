@@ -3,8 +3,10 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::io;
 use std::io::{Write};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::types::{Clients, Client, ClientState, Rooms, Room, USERS_LOCK, ROOMS_LOCK};
+use crate::commands::command_utils::{save_rooms_to_disk};
 
 pub fn broadcast_message(clients: &Clients, room_name: &str, sender: &str, msg: &str, include_sender: bool, bypass_ignores: bool) -> io::Result<()> {
     let client_arcs: Vec<Arc<Mutex<Client>>> =
@@ -31,6 +33,75 @@ pub fn broadcast_message(clients: &Clients, room_name: &str, sender: &str, msg: 
         }
     }
     Ok(())
+}
+
+pub fn check_mute(rooms: &Rooms, room: &str, username: &str) -> io::Result<Option<String>> {
+    let room_arc = {
+        let rooms_map = lock_rooms(rooms)?;
+        match rooms_map.get(room) {
+            Some(r) => Arc::clone(r),
+            None => return Ok(Some("Room not found".to_string())),
+        }
+    };
+
+    let mut need_save = false;
+    let mut still_muted_msg = None;
+
+    {
+        let mut rg = lock_room(&room_arc)?;
+
+        if let Some(rec) = rg.users.get_mut(username) {
+            if rec.muted {
+                let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                    Ok(dur) => dur.as_secs(),
+                    Err(_) => 0,
+                };
+
+                let still_muted = if rec.mute_length == 0 {
+                    true
+                } else {
+                    now < rec.mute_stamp.saturating_add(rec.mute_length)
+                };
+
+                if still_muted {
+                    let remaining = if rec.mute_length == 0 {
+                        "Permanent".to_string()
+                    } else {
+                        let mut rem = rec.mute_stamp + rec.mute_length - now;
+                        let d = rem / 86_400;
+                        rem %= 86_400;
+                        let h = rem / 3_600;
+                        rem %= 3_600;
+                        let m = rem / 60;
+                        let s = rem % 60;
+                        format!("{d}d {h}h {m}m {s}s left")
+                    };
+                    still_muted_msg = Some(if rec.mute_reason.is_empty() {
+                        format!("You are muted ({remaining})")
+                    } else {
+                        format!("You are muted: {}\n> {remaining}", rec.mute_reason)
+                    });
+                } else {
+                    // Mute expired, lift it
+                    rec.muted = false;
+                    rec.mute_stamp = 0;
+                    rec.mute_length = 0;
+                    rec.mute_reason.clear();
+                    need_save = true;
+                }
+            }
+        }
+    }
+
+    if need_save {
+        let rooms_map = lock_rooms(rooms)?;
+        if let Err(e) = save_rooms_to_disk(&rooms_map) {
+            eprintln!("Failed to save rooms: {e}");
+        }
+
+    }
+
+    Ok(still_muted_msg)
 }
 
 pub fn lock_clients(clients: &Clients) -> std::io::Result<std::sync::MutexGuard<'_, HashMap<SocketAddr, Arc<Mutex<Client>>>>> {

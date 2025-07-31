@@ -10,9 +10,9 @@ use serde_json::ser::PrettyFormatter;
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS, unix_timestamp, parse_duration, check_mute};
+use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS, unix_timestamp, parse_duration};
 use crate::types::{Client, Clients, ClientState, Rooms, RoomUser};
-use crate::utils::{broadcast_message, lock_client, lock_clients, lock_room, lock_rooms, lock_rooms_storage, lock_users_storage};
+use crate::utils::{broadcast_message, check_mute, lock_client, lock_clients, lock_room, lock_rooms, lock_rooms_storage, lock_users_storage};
 use super::CommandResult;
 
 pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, room: &String) -> io::Result<CommandResult> {

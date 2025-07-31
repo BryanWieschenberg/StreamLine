@@ -25,19 +25,19 @@
                 "user"
             ],
             "colors": {
-                "mod": "#0080FF",
-                "user": "#FFCCCC",
+                "admin": "#FF3030",
                 "owner": "#FFBB00",
-                "admin": "#FF3030"
+                "mod": "#0080FF",
+                "user": "#FFCCCC"
             }
         },
         "users": {
-            "jeff": {
-                "nick": "jungleballz",
-                "color": "#00A6FF",
+            "bryan": {
+                "nick": "poopnick",
+                "color": "#FF5C77",
                 "role": "admin",
                 "hidden": false,
-                "last_seen": 1753978167,
+                "last_seen": 1753978755,
                 "banned": false,
                 "ban_stamp": 0,
                 "ban_length": 0,
@@ -47,12 +47,12 @@
                 "mute_length": 0,
                 "mute_reason": ""
             },
-            "bryan": {
-                "nick": "poopnick",
-                "color": "#FF5C77",
+            "jeff": {
+                "nick": "jungleballz",
+                "color": "#00A6FF",
                 "role": "admin",
                 "hidden": false,
-                "last_seen": 1753974054,
+                "last_seen": 1753978167,
                 "banned": false,
                 "ban_stamp": 0,
                 "ban_length": 0,
