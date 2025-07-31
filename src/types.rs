@@ -54,10 +54,12 @@ pub struct RoomUser {
     pub role: String,
     pub hidden: bool,
     pub last_seen: u64,
-    pub banned: u64,
+    pub banned: bool,
+    pub ban_stamp: u64,
     pub ban_length: u64,
     pub ban_reason: String,
-    pub muted: u64,
+    pub muted: bool,
+    pub mute_stamp: u64,
     pub mute_length: u64,
     pub mute_reason: String
 }

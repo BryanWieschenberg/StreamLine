@@ -1,4 +1,5 @@
 use colored::*;
+use crate::commands::command_utils::{duration_format_passes};
 
 impl ToString for Command {
     fn to_string(&self) -> String {
@@ -57,6 +58,7 @@ impl ToString for Command {
             Command::UsersRecolor { .. } => "user.color",
             Command::UsersHide => "user.hide",
 
+            Command::ModInfo => "mod.info",
             Command::ModKick { .. } => "mod.kick",
             Command::ModMute { .. } => "mod.mute",
             Command::ModUnmute { .. } => "mod.unmute",
@@ -122,10 +124,11 @@ pub enum Command {
     UsersRecolor { color: String }, //TODO: <-- make username colors & role prefixes + prefix colors work now
     UsersHide, //TODO:
 
-    ModKick { username: String }, //TODO:
-    ModMute { username: String, time: String }, //TODO:
+    ModInfo,
+    ModKick { username: String, reason: String }, //TODO:
+    ModMute { username: String, duration: String, reason: String }, //TODO:
     ModUnmute { username: String }, //TODO:
-    ModBan { username: String, time: String }, //TODO:
+    ModBan { username: String, duration: String, reason: String }, //TODO:
     ModUnban { username: String }, //TODO:
 
     InvalidSyntax { err_msg: String },
@@ -235,10 +238,6 @@ pub fn parse_command(input: &str) -> Command {
             Command::InvalidSyntax { err_msg }
         },
 
-        // Me { message: String }, //TODO: <- check if ignore works for this
-        // Announce { message: String }, //TODO:
-        // Seen { username: String }, //TODO:
-
         ["account", "register", username, password, confirm_password] |
         ["a", "register", username, password, confirm_password] |
         ["account", "r", username, password, confirm_password] |
@@ -292,6 +291,18 @@ pub fn parse_command(input: &str) -> Command {
             username: username.to_string()
         },
 
+        ["account", "edit", "username", ..] |
+        ["a", "edit", "username", ..] |
+        ["account", "e", "username", ..] |
+        ["a", "e", "username", ..] |
+        ["account", "edit", "u", ..] |
+        ["a", "edit", "u", ..] |
+        ["account", "e", "u", ..] |
+        ["a", "e", "u", ..] => {
+            let err_msg = format!("{}", "Usage: /account edit username <new username>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
         ["account", "edit", "password", current_password, new_password] |
         ["a", "edit", "password", current_password, new_password] |
         ["account", "e", "password", current_password, new_password] |
@@ -304,11 +315,23 @@ pub fn parse_command(input: &str) -> Command {
             new_password: new_password.to_string()
         },
 
+        ["account", "edit", "password", ..] |
+        ["a", "edit", "password", ..] |
+        ["account", "e", "password", ..] |
+        ["a", "e", "password", ..] |
+        ["account", "edit", "p", ..] |
+        ["a", "edit", "p", ..] |
+        ["account", "e", "p", ..] |
+        ["a", "e", "p", ..] => {
+            let err_msg = format!("{}", "Usage: /account edit password <current password> <new password>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
         ["account", "edit", ..] |
         ["a", "edit", ..] |
         ["account", "e", ..] |
         ["a", "e", ..] => {
-            let err_msg = format!("{}", "Usage: /account edit username <new username> or /account edit password <current password> <new password>".bright_blue());
+            let err_msg = format!("{}", "Account edit commands:\n> /account edit username <new username>\n> /account edit password <current password> <new password>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -335,7 +358,7 @@ pub fn parse_command(input: &str) -> Command {
 
         ["account", "export", ..] |
         ["a", "export", ..] => {
-            let err_msg = format!("{}", "Usage: /account export or /account export <filename>".bright_blue());
+            let err_msg = format!("{}", "Usage: /account export <filename>?".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -357,7 +380,7 @@ pub fn parse_command(input: &str) -> Command {
         ["a", "delete", ..] |
         ["account", "d", ..] |
         ["a", "d", ..] => {
-            let err_msg = format!("{}", "Usage: /account delete or /account delete force".bright_blue());
+            let err_msg = format!("{}", "Usage: /account delete force?".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -376,7 +399,7 @@ pub fn parse_command(input: &str) -> Command {
 
         ["account", ..] |
         ["a", ..] => {
-            let err_msg = format!("{}", "Account commands:\n> /account info\n> /account register <username> <password> <password confirm>\n> /account login <username> <password>\n> /account logout\n> /account edit username <new username> or /account edit password <current password> <new password>\n> /account import <filename>\n> /account export or /account export <filename>\n> /account delete or /account delete force".bright_blue());
+            let err_msg = format!("{}", "Account commands:\n> /account info\n> /account register <username> <password> <password confirm>\n> /account login <username> <password>\n> /account logout\n> /account edit\n> /account import <filename>\n> /account export <filename>?\n> /account delete force?".bright_blue());
             Command::InvalidSyntax { err_msg }
         }
 
@@ -412,7 +435,7 @@ pub fn parse_command(input: &str) -> Command {
         ["r", "create", ..] |
         ["room", "c", ..] |
         ["r", "c", ..] => {
-            let err_msg = format!("{}", "Usage: /room create <room name> or /room create <room name> whitelist".bright_blue());
+            let err_msg = format!("{}", "Usage: /room create <room name> whitelist?".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -466,7 +489,7 @@ pub fn parse_command(input: &str) -> Command {
         ["r", "delete", ..] |
         ["room", "d", ..] |
         ["r", "d", ..] => {
-            let err_msg = format!("{}", "Usage: /room delete <room name> or /room delete <room name> force".bright_blue());
+            let err_msg = format!("{}", "Usage: /room delete <room name> force?".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -485,7 +508,7 @@ pub fn parse_command(input: &str) -> Command {
 
         ["room", ..] |
         ["r", ..] => {
-            let err_msg = format!("{}", "Room commands:\n> /room list\n> /room create <room name> or /room create <room name> whitelist\n> /room join <room name>\n> /room import <filename>\n> /room delete <room name> or /room delete <room name> force".bright_blue());
+            let err_msg = format!("{}", "Room commands:\n> /room list\n> /room create <room name> whitelist?\n> /room join <room name>\n> /room import <filename>\n> /room delete <room name> force?".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -529,7 +552,7 @@ pub fn parse_command(input: &str) -> Command {
 
         ["super", "export", ..] |
         ["s", "export", ..] => {
-            let err_msg = format!("{}", "Usage: /super export or /account super <filename>".bright_blue());
+            let err_msg = format!("{}", "Usage: /super export <filename>?".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -777,7 +800,7 @@ pub fn parse_command(input: &str) -> Command {
         ["super", "roles", "as", role, users @ ..] |
         ["super", "r", "as", role, users @ ..] |
         ["s", "roles", "as", role, users @ ..] |
-        ["s", "r", "as", role, users @ ..] => Command::SuperRolesAssign {
+        ["s", "r", "as", role, users @ ..] if !users.is_empty() => Command::SuperRolesAssign {
             role: role.to_string(),
             users: users.join(" ")
         },
@@ -828,9 +851,212 @@ pub fn parse_command(input: &str) -> Command {
 
         ["super", ..] |
         ["s", ..] => {
-            let err_msg = format!("{}", "Super commands:\n> /super users\n> /super rename <new room name>\n> /super export OR /super export <filename>\n> /super whitelist\n> /super limit\n> /super roles".bright_blue());
+            let err_msg = format!("{}", "Super commands:\n> /super users\n> /super rename <new room name>\n> /super export <filename>?\n> /super whitelist\n> /super limit\n> /super roles".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
+
+        ["user", "list"] |
+        ["u", "list"] |
+        ["user", "l"] |
+        ["u", "l"] => Command::Users,
+
+        ["user", "list", ..] |
+        ["u", "list", ..] |
+        ["user", "l", ..] |
+        ["u", "l", ..] => {
+            let err_msg = format!("{}", "Usage: /user list".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        }
+
+        ["user", "rename", name] |
+        ["u", "rename", name] |
+        ["user", "rn", name] |
+        ["u", "rn", name] => Command::UsersRename {
+            name: name.to_string()
+        },
+
+        ["user", "rename", ..] |
+        ["u", "rename", ..] |
+        ["user", "rn", ..] |
+        ["u", "rn", ..] => {
+            let err_msg = format!("{}", "Usage: /user rename <new name>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["user", "recolor", color] |
+        ["u", "recolor", color] |
+        ["user", "rc", color] |
+        ["u", "rc", color] => Command::UsersRecolor {
+            color: color.to_string()
+        },
+
+        ["user", "recolor", ..] |
+        ["u", "recolor", ..] |
+        ["user", "rc", ..] |
+        ["u", "rc", ..] => {
+            let err_msg = format!("{}", "Usage: /user recolor <color hex>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["user", "hide"] |
+        ["u", "hide"] |
+        ["user", "h"] |
+        ["u", "h"] => Command::UsersHide,
+
+        ["user", "hide", ..] |
+        ["u", "hide", ..] => {
+            let err_msg = format!("{}", "Usage: /user hide".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["user", ..] |
+        ["u", ..] => {
+            let err_msg = format!("{}", "User commands:\n> /user list\n> /user rename <new name>\n> /user recolor <color hex>\n> /user hide".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        }
+
+        ["mod", "info"] |
+        ["m", "info"] |
+        ["mod", "i"] |
+        ["m", "i"] => Command::ModInfo,
+
+        ["mod", "info", ..] |
+        ["m", "info", ..] |
+        ["mod", "i", ..] |
+        ["m", "i", ..] => {
+            let err_msg = format!("{}", "Usage: /mod info".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["mod", "kick", username] |
+        ["m", "kick", username] |
+        ["mod", "k", username] |
+        ["m", "k", username] => Command::ModKick {
+            username: username.to_string(),
+            reason: "".to_string()
+        },
+
+        ["mod", "kick", username, reason @ ..] |
+        ["m", "kick", username, reason @ ..] |
+        ["mod", "k", username, reason @ ..] |
+        ["m", "k", username, reason @ ..] if !reason.is_empty() => Command::ModKick {
+            username: username.to_string(),
+            reason: reason.join(" ")
+        },
+
+        ["mod", "kick", ..] |
+        ["m", "kick", ..] |
+        ["mod", "k", ..] |
+        ["m", "k", ..] => {
+            let err_msg = format!("{}", "Usage: /mod kick <username> <reason>?".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["mod", "ban", username] |
+        ["m", "ban", username] |
+        ["mod", "b", username] |
+        ["m", "b", username] => Command::ModBan {
+            username: username.to_string(),
+            duration: "*".to_string(),
+            reason: "".to_string()
+        },
+
+        ["mod", "ban", username, duration] |
+        ["m", "ban", username, duration] |
+        ["mod", "b", username, duration] |
+        ["m", "b", username, duration] if duration_format_passes(duration) => Command::ModBan {
+            username: username.to_string(),
+            duration: duration.to_string(),
+            reason: "".to_string()
+        },
+
+        ["mod", "ban", username, duration, reason @ ..] |
+        ["m", "ban", username, duration, reason @ ..] |
+        ["mod", "b", username, duration, reason @ ..] |
+        ["m", "b", username, duration, reason @ ..] if duration_format_passes(duration) => Command::ModBan {
+            username: username.to_string(),
+            duration: duration.to_string(),
+            reason: reason.join(" ")
+        },
+
+        ["mod", "ban", ..] |
+        ["m", "ban", ..] |
+        ["mod", "b", ..] |
+        ["m", "b", ..] => {
+            let err_msg = format!("{}", "Usage: /mod ban <username> <_d_h_m_s|*>? <reason>?".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["mod", "unban", username] |
+        ["m", "unban", username] |
+        ["mod", "ub", username] |
+        ["m", "ub", username] => Command::ModUnban {
+            username: username.to_string()
+        },
+
+        ["mod", "unban", ..] |
+        ["m", "unban", ..] |
+        ["mod", "ub", ..] |
+        ["m", "ub", ..] => {
+            let err_msg = format!("{}", "Usage: /mod unban <username>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["mod", "mute", username] |
+        ["m", "mute", username] |
+        ["mod", "m", username] |
+        ["m", "m", username] => Command::ModMute {
+            username: username.to_string(),
+            duration: "*".to_string(),
+            reason: "".to_string()
+        },
+
+        ["mod", "mute", username, duration] |
+        ["m", "mute", username, duration] |
+        ["mod", "m", username, duration] |
+        ["m", "m", username, duration] if duration_format_passes(duration) => Command::ModMute {
+            username: username.to_string(),
+            duration: duration.to_string(),
+            reason: "".to_string()
+        },
+
+        ["mod", "mute", username, duration, reason @ ..] |
+        ["m", "mute", username, duration, reason @ ..] |
+        ["mod", "m", username, duration, reason @ ..] |
+        ["m", "m", username, duration, reason @ ..] if duration_format_passes(duration) => Command::ModMute {
+            username: username.to_string(),
+            duration: duration.to_string(),
+            reason: reason.join(" ")
+        },
+
+        ["mod", "mute", ..] |
+        ["m", "mute", ..] |
+        ["mod", "m", ..] |
+        ["m", "m", ..] => {
+            let err_msg = format!("{}", "Usage: /mod mute <username> <_d_h_m_s|*>? <reason>?".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["mod", "unmute", username] |
+        ["m", "unmute", username] |
+        ["mod", "um", username] |
+        ["m", "um", username] => Command::ModUnmute {
+            username: username.to_string()
+        },
+
+        ["mod", "unmute", ..] |
+        ["m", "unmute", ..] |
+        ["mod", "um", ..] |
+        ["m", "um", ..] => {
+            let err_msg = format!("{}", "Usage: /mod unmute <username>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        },
+
+        ["mod", ..] |
+        ["m", ..] => {
+            let err_msg = format!("{}", "Mod commands:\n> /mod info\n> /mod kick <username> <reason>?\n> /mod ban <username> <_d_h_m_s|*>? <reason>?\n> /mod unban <username>\n> /mod mute <username> <_d_h_m_s|*>? <reason>?\n> /mod unmute <username>".bright_blue());
+            Command::InvalidSyntax { err_msg }
+        }
 
         _ => Command::Unavailable
     }

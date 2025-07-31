@@ -12,60 +12,65 @@
                 "afk",
                 "msg",
                 "me",
+                "seen",
                 "super.users",
                 "user",
-                "mod",
-                "super.roles"
+                "mod"
             ],
             "user": [
                 "afk",
                 "msg",
                 "me",
-                "user",
-                "super.rename",
-                "super.export"
+                "seen",
+                "user"
             ]
         },
         "session_timeout": 0,
         "users": {
-            "bryan": {
-                "color": "",
-                "hidden": false,
-                "last_seen": 1753906896,
-                "nick": "",
-                "role": "admin",
-                "banned": 0,
+            "balls": {
                 "ban_length": 0,
                 "ban_reason": "",
-                "muted": 0,
-                "mute_length": 0,
-                "mute_reason": ""
-            },
-            "jeff": {
-                "color": "",
-                "hidden": false,
-                "last_seen": 1753904581,
-                "nick": "",
-                "role": "admin",
-                "banned": 0,
-                "ban_length": 0,
-                "ban_reason": "",
-                "muted": 0,
-                "mute_length": 0,
-                "mute_reason": ""
-            },
-            "shithead": {
+                "ban_stamp": 0,
+                "banned": false,
                 "color": "",
                 "hidden": false,
                 "last_seen": 0,
+                "mute_length": 0,
+                "mute_reason": "",
+                "mute_stamp": 0,
+                "muted": false,
                 "nick": "",
-                "role": "moderator",
-                "banned": 0,
+                "role": "user"
+            },
+            "bryan": {
                 "ban_length": 0,
                 "ban_reason": "",
-                "muted": 0,
+                "ban_stamp": 0,
+                "banned": false,
+                "color": "",
+                "hidden": false,
+                "last_seen": 1753920398,
                 "mute_length": 0,
-                "mute_reason": ""
+                "mute_reason": "",
+                "mute_stamp": 0,
+                "muted": false,
+                "nick": "",
+                "role": "admin"
+            },
+            "jeff": {
+                "ban_length": 0,
+                "ban_reason": "",
+                "ban_stamp": 0,
+                "banned": false,
+                "color": "",
+                "hidden": false,
+                "last_seen": 1753904581,
+                "mute_length": 0,
+                "mute_reason": "",
+                "mute_stamp": 0,
+                "muted": false,
+                "nick": "",
+                "role": "admin"
             }
         },
         "whitelist": [

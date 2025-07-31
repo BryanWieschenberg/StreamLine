@@ -353,13 +353,13 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                     "Visible".green().to_string()
                 };
 
-                let banned_status = if udata.banned == 0 {
+                let banned_status = if !udata.banned {
                     "Not Banned".green().to_string()
                 } else {
                     format!("Banned ({})", udata.banned).red().to_string()
                 };
 
-                let muted_status = if udata.muted == 0 {
+                let muted_status = if !udata.muted {
                     "Not Muted".green().to_string()
                 } else {
                     format!("Muted ({})", udata.muted).yellow().to_string()
@@ -1032,10 +1032,12 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                         role: "user".to_string(),
                         hidden: false,
                         last_seen: 0,
-                        banned: 0,
+                        banned: false,
+                        ban_stamp: 0,
                         ban_length: 0,
                         ban_reason: "".to_string(),
-                        muted: 0,
+                        muted: false,
+                        mute_stamp: 0,
                         mute_length: 0,
                         mute_reason: "".to_string()
                     });
@@ -1127,7 +1129,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } |
         Command::Announce { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
-        Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
+        Command::ModInfo | Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Must be in the lobby to perform this command".yellow())?;
             Ok(CommandResult::Handled)

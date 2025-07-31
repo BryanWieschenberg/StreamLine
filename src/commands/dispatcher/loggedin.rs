@@ -48,7 +48,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
         Command::Leave | Command::Status | Command::AFK | Command::Announce { .. } | Command::Seen { .. } | Command::DM { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
         Command::SuperUsers | Command::SuperRename { .. } | Command::SuperExport { .. } | Command::SuperWhitelist | Command::SuperWhitelistToggle | Command::SuperWhitelistAdd { .. } | Command::SuperWhitelistRemove { .. } | Command::SuperLimit | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
-        Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
+        Command::ModInfo | Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Must be in a room to perform this command".yellow())?;
             Ok(CommandResult::Handled)
@@ -499,10 +499,12 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                     role: "user".to_string(),
                     hidden: false,
                     last_seen: 0,
-                    banned: 0,
+                    banned: false,
+                    ban_stamp: 0,
                     ban_length: 0,
                     ban_reason: "".to_string(),
-                    muted: 0,
+                    muted: false,
+                    mute_stamp: 0,
                     mute_length: 0,
                     mute_reason: "".to_string()
                 });
@@ -518,10 +520,12 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                         "role": "user",
                         "hidden": false,
                         "last_seen": 0,
-                        "banned": 0,
+                        "banned": false,
+                        "ban_stamp": 0,
                         "ban_length": 0,
                         "ban_reason": "",
-                        "muted": 0,
+                        "muted": false,
+                        "mute_stamp": 0,
                         "mute_length": 0,
                         "mute_reason": ""
                     });

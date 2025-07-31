@@ -32,6 +32,7 @@ pub static DESCRIPTIONS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
         ("user.recolor",    "> /user recolor     Changes your name color in the room"),
         ("user.hide",       "> /user hide        Hides you from /user list"),
         ("mod",             "> /mod              Use chat moderation tools"),
+        ("mod.info",        "> /mod info         Show who is muted and banned"),
         ("mod.kick",        "> /mod kick         Kick users from the chat"),
         ("mod.mute",        "> /mod mute         Disable certain users from speaking"),
         ("mod.ban",         "> /mod ban          Disable certain users from joining")
@@ -43,7 +44,7 @@ pub static RESTRICTED_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         "afk", "msg", "me", "seen", "announce",
         "super", "super.users", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
         "user", "user.list", "user.rename", "user.recolor", "user.hide",
-        "mod", "mod.kick", "mod.ban", "mod.mute",
+        "mod", "mod.info", "mod.kick", "mod.ban", "mod.mute",
     ])
 });
 
@@ -53,7 +54,7 @@ pub fn command_order() -> Vec<&'static str> {
         "afk", "msg", "me", "seen", "announce",
         "super", "super.users", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
         "user", "user.list", "user.rename", "user.recolor", "user.hide",
-        "mod", "mod.kick", "mod.ban", "mod.mute"
+        "mod", "mod.info", "mod.kick", "mod.ban", "mod.mute"
     ]
 }
 
@@ -261,4 +262,19 @@ pub fn unix_timestamp(rooms: &Rooms, room_name: &str, username: &str) -> io::Res
     }
 
     Ok(())
+}
+
+pub fn duration_format_passes(duration: &str) -> bool{
+    if duration == "*" {
+        true
+    } else {
+        // Regex for patterns like 10d5h3m2s, any order, each component is optional but must have valid suffix
+        let re = match regex::Regex::new(r"^(\d+d)?(\d+h)?(\d+m)?(\d+s)?$") {
+            Ok(r) => r,
+            Err(_) => return false, // Invalid regex
+        };
+        re.is_match(duration)
+    };
+
+    true
 }
