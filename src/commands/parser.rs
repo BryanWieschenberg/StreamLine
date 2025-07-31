@@ -119,10 +119,10 @@ pub enum Command {
     SuperRolesAssign { role: String, users: String },
     SuperRolesRecolor { role: String, color: String },
 
-    Users, //TODO:
-    UsersRename { name: String }, //TODO: <-- make nicknames actually work in the room now (with proper errchecks)
-    UsersRecolor { color: String }, //TODO: <-- make username colors & role prefixes + prefix colors work now
-    UsersHide, //TODO:
+    Users,
+    UsersRename { name: String },
+    UsersRecolor { color: String },
+    UsersHide,
 
     ModInfo,
     ModKick { username: String, reason: String }, //TODO:
@@ -879,7 +879,7 @@ pub fn parse_command(input: &str) -> Command {
         ["u", "rename", ..] |
         ["user", "rn", ..] |
         ["u", "rn", ..] => {
-            let err_msg = format!("{}", "Usage: /user rename <new name>".bright_blue());
+            let err_msg = format!("{}", "Usage: /user rename <new name|*>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -894,7 +894,7 @@ pub fn parse_command(input: &str) -> Command {
         ["u", "recolor", ..] |
         ["user", "rc", ..] |
         ["u", "rc", ..] => {
-            let err_msg = format!("{}", "Usage: /user recolor <color hex>".bright_blue());
+            let err_msg = format!("{}", "Usage: /user recolor <color hex|*>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -911,7 +911,7 @@ pub fn parse_command(input: &str) -> Command {
 
         ["user", ..] |
         ["u", ..] => {
-            let err_msg = format!("{}", "User commands:\n> /user list\n> /user rename <new name>\n> /user recolor <color hex>\n> /user hide".bright_blue());
+            let err_msg = format!("{}", "User commands:\n> /user list\n> /user rename <new name|*>\n> /user recolor <color hex|*>\n> /user hide".bright_blue());
             Command::InvalidSyntax { err_msg }
         }
 

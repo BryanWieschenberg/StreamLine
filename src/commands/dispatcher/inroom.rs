@@ -1177,10 +1177,221 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
+        Command::Users => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room {} not found", room).yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+            let room_guard = lock_room(&room_arc)?;
+
+            let mut cli = lock_client(&client)?;
+            writeln!(cli.stream, "{}", format!("Users in {}:", room).green())?;
+            drop(cli);
+
+            let clients_map = lock_clients(clients)?;
+            for (uname, udata) in &room_guard.users {
+                if !room_guard.online_users.contains(uname) || udata.hidden {
+                    continue;
+                }
+
+                let role = {
+                    let mut ch = udata.role.chars();
+                    match ch.next() {
+                        Some(f) => f.to_uppercase().collect::<String>() + ch.as_str(),
+                        None => String::new(),
+                    }
+                };
+
+                let nickname = if udata.nick.is_empty() {
+                    "None".to_string()
+                } else {
+                    udata.nick.italic().to_string()
+                };
+
+                let color_display = if udata.color.is_empty() {
+                    "Default".to_string()
+                } else {
+                    format!("{}", udata.color).truecolor_from_hex(&udata.color).to_string()
+                };
+
+                let afk_status = {
+                    let mut afk = false;
+                    for c_arc in clients_map.values() {
+                        if let Ok(c) = c_arc.lock() {
+                            if let ClientState::InRoom { username: u, room: rnm, is_afk, .. } = &c.state {
+                                if u == uname && rnm == room {
+                                    afk = *is_afk;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if afk { "True".yellow().to_string() } else { "False".green().to_string() }
+                };
+
+                let mut cli = lock_client(&client)?;
+                writeln!(cli.stream, "> {} - Role: {}, Nickname: {}, Color: {}, AFK: {}",
+                    uname.cyan(),
+                    role,
+                    nickname,
+                    color_display,
+                    afk_status
+                )?;
+            }
+
+            Ok(CommandResult::Handled)
+        }
+
+        Command::UsersRename { name } => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room {room} not found").yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            {
+                let mut room_guard = lock_room(&room_arc)?;
+                match room_guard.users.get_mut(username) {
+                    Some(u) => {
+                        if name == "*" {
+                            u.nick.clear();
+                        } else {
+                            u.nick = name.clone();
+                        }
+                    }
+                    None => {
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", "Error: user record missing".red())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                }
+            }
+
+            if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            let mut client = lock_client(&client)?;
+            if name == "*" {
+                writeln!(client.stream, "{}", "Nickname cleared".green())?;
+            } else {
+                writeln!(client.stream, "{}", format!("Nickname set to '{}'", name.italic()).green())?;
+            }
+
+            Ok(CommandResult::Handled)
+        }
+        
+        Command::UsersRecolor { color } => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room {room} not found").yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let formatted_color = if color == "*" {
+                String::new()
+            } else {
+                let c = color.trim_start_matches('#').to_uppercase();
+
+                if c.len() != 6 || !c.chars().all(|ch| ch.is_ascii_hexdigit()) {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Color must be * or a 6-digit hex value (0-9, A-F)".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+                
+                format!("#{c}")
+            };
+
+            {
+                let mut room_guard = lock_room(&room_arc)?;
+                match room_guard.users.get_mut(username) {
+                    Some(u) => {
+                        u.color = formatted_color.clone();
+                    }
+                    None => {
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", "Error: user record missing".red())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                }
+            }
+
+            if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            let mut client = lock_client(&client)?;
+            if formatted_color.is_empty() {
+                writeln!(client.stream, "{}", "Color cleared".green())?;
+            } else {
+                writeln!(client.stream, "{} {}", "Color set to".green(), formatted_color.clone().truecolor_from_hex(&formatted_color))?;
+            }
+
+            Ok(CommandResult::Handled)
+        }
+        
+        Command::UsersHide => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room {room} not found").yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let hidden_now = {
+                let mut room_guard = lock_room(&room_arc)?;
+                match room_guard.users.get_mut(username) {
+                    Some(u) => {
+                        u.hidden = !u.hidden;
+                        u.hidden
+                    }
+                    None => {
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", "Error: user record missing".red())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                }
+            };
+
+            if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            let mut client = lock_client(&client)?;
+            if hidden_now {
+                writeln!(client.stream, "{}", "You are now hidden".green())?;
+            } else {
+                writeln!(client.stream, "{}", "You are now unhidden".green())?;
+            }
+
+            Ok(CommandResult::Handled)
+        }
+
         Command::Account | Command::AccountLogout | Command::AccountEditUsername { .. } | Command::AccountEditPassword { .. } | Command::AccountImport { .. } | Command::AccountExport { .. } | Command::AccountDelete { .. } |
         Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } |
         Command::Announce { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
-        Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
         Command::ModInfo | Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Must be in the lobby to perform this command".yellow())?;
