@@ -77,9 +77,9 @@ pub enum Command {
     Quit,
     Leave,
     Status,
-    IgnoreList, //TODO: <-- ensure ignore works for normal msgs and /me
-    IgnoreAdd { users: String }, //TODO:
-    IgnoreRemove { users: String }, //TODO:
+    IgnoreList,
+    IgnoreAdd { users: String },
+    IgnoreRemove { users: String },
 
     AFK,
     DM { recipient: String, message: String },

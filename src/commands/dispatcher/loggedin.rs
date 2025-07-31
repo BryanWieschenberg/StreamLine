@@ -45,7 +45,129 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             Ok(CommandResult::Stop)
         }
 
-        Command::Leave | Command::Status | Command::AFK | Command::Announce { .. } | Command::Seen { .. } | Command::DM { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
+        Command::IgnoreList => {
+            let ignore_list = {
+                let client_guard = lock_client(&client)?;
+                client_guard.ignore_list.clone()
+            };
+
+            let mut client = lock_client(&client)?;
+            
+            if client.ignore_list.is_empty() {
+                writeln!(client.stream, "{}", "You do not currently have anyone ignored".green())?;
+            } else {
+                writeln!(client.stream, "{}", format!("Currently ignoring: {}", ignore_list.join(", ")).green())?;
+            }
+            Ok(CommandResult::Handled)
+        }
+        
+        Command::IgnoreAdd { users } => {
+            let to_add: Vec<String> = users
+                .split_whitespace()
+                .filter(|u| !u.is_empty() && u != username)
+                .map(|u| u.to_string())
+                .collect();
+
+            let (added, already): (Vec<String>, Vec<String>) = {
+                let mut client = lock_client(&client)?;
+                let mut added = Vec::new();
+                let mut already = Vec::new();
+                for u in &to_add {
+                    if client.ignore_list.contains(u) {
+                        already.push(u.clone());
+                    } else {
+                        client.ignore_list.push(u.clone());
+                        added.push(u.clone());
+                    }
+                }
+                (added, already)
+            };
+
+            if !added.is_empty() {
+                let _ulock = lock_users_storage()?;
+                let file = File::open("data/users.json")?;
+                let reader = BufReader::new(file);
+                let mut users_json: Value = serde_json::from_reader(reader)?;
+
+                if let Some(ignore_arr) = users_json[username]
+                    .get_mut("ignore")
+                    .and_then(Value::as_array_mut)
+                {
+                    for u in &added {
+                        ignore_arr.push(json!(u));
+                    }
+                }
+
+                let file = OpenOptions::new().write(true).truncate(true).open("data/users.json")?;
+                let mut writer = std::io::BufWriter::new(file);
+                let formatter = PrettyFormatter::with_indent(b"    ");
+                let mut ser = Serializer::with_formatter(&mut writer, formatter);
+                users_json.serialize(&mut ser)?;
+            }
+
+            let mut client = lock_client(&client)?;
+            if !added.is_empty() {
+                writeln!(client.stream, "{}", format!("Added to ignore list: {}", added.join(", ")).green())?;
+            }
+            if !already.is_empty() {
+                writeln!(client.stream, "{}", format!("Already ignored: {}", already.join(", ")).yellow())?;
+            }
+            Ok(CommandResult::Handled)
+        }
+
+        Command::IgnoreRemove { users } => {
+            let to_remove: Vec<String> = users
+                .split_whitespace()
+                .filter(|u| !u.is_empty())
+                .map(|u| u.to_string())
+                .collect();
+
+            let (removed, not_found): (Vec<String>, Vec<String>) = {
+                let mut client = lock_client(&client)?;
+                let mut removed = Vec::new();
+                let mut not_found = Vec::new();
+                for u in &to_remove {
+                    if client.ignore_list.contains(u) {
+                        removed.push(u.clone());
+                    } else {
+                        not_found.push(u.clone());
+                    }
+                }
+                client.ignore_list.retain(|u| !removed.contains(u));
+                (removed, not_found)
+            };
+
+            if !removed.is_empty() {
+                let _ulock = lock_users_storage()?;
+                let file = File::open("data/users.json")?;
+                let reader = BufReader::new(file);
+                let mut users_json: Value = serde_json::from_reader(reader)?;
+
+                if let Some(ignore_arr) = users_json[username]
+                    .get_mut("ignore")
+                    .and_then(Value::as_array_mut)
+                {
+                    ignore_arr.retain(|v| !removed.iter().any(|u| v == u));
+                }
+
+                let file = OpenOptions::new().write(true).truncate(true).open("data/users.json")?;
+                let mut writer = std::io::BufWriter::new(file);
+                let formatter = PrettyFormatter::with_indent(b"    ");
+                let mut ser = Serializer::with_formatter(&mut writer, formatter);
+                users_json.serialize(&mut ser)?;
+            }
+
+            let mut client = lock_client(&client)?;
+            if !removed.is_empty() {
+                writeln!(client.stream, "{}", format!("Removed from ignore list: {}", removed.join(", ")).green())?;
+            }
+            if !not_found.is_empty() {
+                writeln!(client.stream, "{}", format!("Not in ignore list: {}", not_found.join(", ")).yellow())?;
+            }
+            Ok(CommandResult::Handled)
+        }
+
+        Command::Leave | Command::Status | Command::AFK | Command::Announce { .. } | Command::Seen { .. } | Command::DM { .. } | Command::Me { .. } |
         Command::SuperUsers | Command::SuperRename { .. } | Command::SuperExport { .. } | Command::SuperWhitelist | Command::SuperWhitelistToggle | Command::SuperWhitelistAdd { .. } | Command::SuperWhitelistRemove { .. } | Command::SuperLimit | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
         Command::ModInfo | Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
@@ -161,7 +283,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 filename
             };
 
-            let import_path = format!("data/logs/users/{}", safe_filename);
+            let import_path = format!("data/vault/users/{}", safe_filename);
             let import_file = match File::open(&import_path) {
                 Ok(file) => file,
                 Err(_) => {
@@ -247,7 +369,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 }
             };
 
-            let export_path = format!("data/logs/users/{}", final_filename);
+            let export_path = format!("data/vault/users/{}", final_filename);
             let export_file = OpenOptions::new().create(true).write(true).truncate(true).open(&export_path)?;
 
             let mut writer = std::io::BufWriter::new(export_file);
@@ -641,7 +763,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 filename
             };
 
-            let import_path = format!("data/logs/rooms/{}", safe_filename);
+            let import_path = format!("data/vault/rooms/{}", safe_filename);
             let import_file = match File::open(&import_path) {
                 Ok(file) => file,
                 Err(_) => {

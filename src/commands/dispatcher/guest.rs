@@ -153,7 +153,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
                 filename
             };
 
-            let import_path = format!("data/logs/users/{}", safe_filename);
+            let import_path = format!("data/vault/users/{}", safe_filename);
             let import_file = match File::open(&import_path) {
                 Ok(file) => file,
                 Err(_) => {
