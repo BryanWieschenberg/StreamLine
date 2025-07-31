@@ -110,14 +110,14 @@ pub fn format_broadcast(rooms: &Rooms, room_name: &str, username: &str) -> io::R
     let rooms_map = lock_rooms(rooms)?;
     let room_arc = match rooms_map.get(room_name) {
         Some(r) => Arc::clone(r),
-        None => return Ok(("".to_string(), username.green().to_string())),
+        None => return Ok(("".to_string(), username.to_string())),
     };
 
     let rg = lock_room(&room_arc)?;
     let user_info = rg.users.get(username);
 
     let mut prefix_colored = "".to_string();
-    let mut display_name = username.green().to_string();
+    let mut display_name = username.to_string();
 
     if let Some(info) = user_info {
         // Role prefix and color

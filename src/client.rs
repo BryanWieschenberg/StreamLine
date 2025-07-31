@@ -2,9 +2,34 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::{env, thread};
 use colored::Colorize;
-
+use std::time::{SystemTime, UNIX_EPOCH};
 mod crypto;
 use crate::crypto::{sayhi};
+
+fn handle_control_packets(msg: &str) -> std::io::Result<()> {
+    // Ping FRT latency calculation
+    if let Some(frt_latency) = msg.strip_prefix("/PONG ") {
+        if let Ok(sent_ms) = frt_latency.trim().parse::<u128>() {
+            let now_ms = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(dur) => dur.as_millis(),
+                Err(_) => 0,
+            };
+
+            let rtt_s = (now_ms.saturating_sub(sent_ms)) as f64 / 1000.0;
+            println!("{}", format!("Pong! Full round-trip latency: {rtt_s:.3} seconds").green());
+        } else {
+            eprintln!("Warning: Received /ping but timestamp was invalid");
+        }
+        return Ok(());
+    }
+    
+    else if let Some(username) = msg.strip_prefix("/LOGIN_OK ") {
+        sayhi(username);
+        return Ok(());
+    }
+    
+    Ok(())
+}
 
 // Function to handle receiving messages from the server
 fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
@@ -12,9 +37,10 @@ fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
     for line in reader.lines() {
         match line {
             Ok(msg) => {
-                if let Some(username) = msg.strip_prefix("/LOGIN_OK ") {
-                    sayhi(username);
-                    continue;
+                if msg.starts_with("/") {
+                    if let Err(e) = handle_control_packets(&msg) {
+                        eprintln!("Error handling control packet: {e}");
+                    }
                 }
 
                 println!("{msg}")
@@ -80,6 +106,16 @@ fn main() -> std::io::Result<()> {
             print!("\x1B[2J\x1B[H");
             io::stdout().flush()?;
             continue;
+        }
+
+        if msg == "/ping" {
+            let now_ms = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(dur) => dur.as_millis(),
+                Err(_) => 0,
+            };
+            let ping_setup = format!("/ping {}", now_ms);
+            stream.write_all(ping_setup.as_bytes())?;
+            stream.write_all(b"\n")?;
         }
 
         stream.write_all(msg.as_bytes())?;

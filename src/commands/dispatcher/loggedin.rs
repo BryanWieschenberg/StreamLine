@@ -22,9 +22,11 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             Ok(CommandResult::Handled)
         }
 
-        Command::Ping => {
+        Command::Ping { start_time }=> {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "PONG.".green())?;
+            if let Some(start_ms) = start_time {
+                writeln!(client.stream, "/PONG {}", start_ms)?;
+            }
             Ok(CommandResult::Handled)
         }
 

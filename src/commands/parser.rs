@@ -6,7 +6,7 @@ impl ToString for Command {
         match self {
             // Not mapped to a permission since non-room commands are always available
             Command::Help |
-            Command::Ping |
+            Command::Ping { .. } |
             Command::Quit |
             Command::Leave |
             Command::Status |
@@ -72,7 +72,7 @@ impl ToString for Command {
 
 pub enum Command {
     Help,
-    Ping,
+    Ping { start_time: Option<u128> },
     Quit,
     Leave,
     Status,
@@ -140,7 +140,8 @@ pub fn parse_command(input: &str) -> Command {
 
     match tokens.as_slice() {
         ["help"] | ["h"] => Command::Help,
-        ["ping"] => Command::Ping,
+        ["ping", ts] => Command::Ping { start_time: ts.parse::<u128>().ok() },
+        ["ping"] => Command::Ping { start_time: None },
         ["quit"] | ["exit"] | ["q"] | ["e"] => Command::Quit,
         ["leave"] => Command::Leave,
         ["status"] => Command::Status,

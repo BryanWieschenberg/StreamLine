@@ -20,9 +20,11 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             Ok(CommandResult::Handled)
         }
 
-        Command::Ping => {
+        Command::Ping { start_time }=> {
             let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "PONG.".green())?;
+            if let Some(start_ms) = start_time {
+                writeln!(client.stream, "/PONG {}", start_ms)?;
+            }
             Ok(CommandResult::Handled)
         }
 
@@ -91,6 +93,8 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             let mut client = lock_client(&client)?;
             client.state = ClientState::LoggedIn { username: username.clone() };
             writeln!(client.stream, "{}", format!("User Registered: {}", username).green())?;
+            // Have client generate/load privkey for this account
+            writeln!(client.stream, "{}", format!("/LOGIN_OK {}", username))?;
 
             Ok(CommandResult::Handled)
         }
