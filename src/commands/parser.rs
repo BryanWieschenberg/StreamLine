@@ -34,8 +34,8 @@ impl ToString for Command {
             Command::AFK => "afk",
             Command::DM { .. } => "msg",
             Command::Me { .. } => "me",
-            Command::Announce { .. } => "announce",
             Command::Seen { .. } => "seen",
+            Command::Announce { .. } => "announce",
 
             Command::SuperUsers => "super.users",
             Command::SuperRename { .. } => "super.rename",
@@ -70,7 +70,6 @@ impl ToString for Command {
     }
 }
 
-// #[derive(Debug, Clone)]
 pub enum Command {
     Help,
     Ping,
@@ -83,8 +82,8 @@ pub enum Command {
 
     AFK,
     DM { recipient: String, message: String },
-    Me { action: String }, //TODO: <- check if ignore works for this
-    Announce { message: String }, //TODO:
+    Me { action: String },
+    Announce { message: String },
     Seen { username: String },
 
     Account,
@@ -125,11 +124,11 @@ pub enum Command {
     UsersHide,
 
     ModInfo,
-    ModKick { username: String, reason: String }, //TODO:
-    ModMute { username: String, duration: String, reason: String }, //TODO:
-    ModUnmute { username: String }, //TODO:
-    ModBan { username: String, duration: String, reason: String }, //TODO:
-    ModUnban { username: String }, //TODO:
+    ModKick { username: String, reason: String },
+    ModMute { username: String, duration: String, reason: String },
+    ModUnmute { username: String },
+    ModBan { username: String, duration: String, reason: String },
+    ModUnban { username: String },
 
     InvalidSyntax { err_msg: String },
     Unavailable

@@ -278,3 +278,39 @@ pub fn duration_format_passes(duration: &str) -> bool{
 
     true
 }
+
+// Parses a duration string like "10d5h3m2s" from ModBan/ModMute into seconds
+pub fn parse_duration(spec: &str) -> io::Result<u64> {
+    if spec == "*" { return Ok(0); }
+    let mut secs: u64 = 0;
+    let mut num = String::new();
+    for ch in spec.chars() {
+        if ch.is_ascii_digit() {
+            num.push(ch);
+        } else {
+            let val: u64 = num.parse().map_err(|_| {
+                io::Error::new(io::ErrorKind::InvalidInput, "Invalid duration number")
+            })?;
+            num.clear();
+            match ch {
+                'd' | 'D' => secs += val * 86_400,
+                'h' | 'H' => secs += val * 3_600,
+                'm' | 'M' => secs += val * 60,
+                's' | 'S' => secs += val,
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "Invalid duration specifier",
+                    ))
+                }
+            }
+        }
+    }
+    if !num.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Duration spec ended unexpectedly",
+        ));
+    }
+    Ok(secs)
+}

@@ -10,7 +10,7 @@ use serde_json::ser::PrettyFormatter;
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS, unix_timestamp};
+use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS, unix_timestamp, parse_duration};
 use crate::types::{Client, Clients, ClientState, Rooms, RoomUser};
 use crate::utils::{lock_client, lock_clients, lock_room, lock_rooms, lock_rooms_storage, lock_users_storage};
 use super::CommandResult;
@@ -401,11 +401,10 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
-        // Command::Me { action } => {
+        Command::Me { action } => {
             
-            
-        //     Ok(CommandResult::Handled)
-        // }
+            Ok(CommandResult::Handled)
+        }
 
         Command::Seen { username } => { 
             let rooms_map = lock_rooms(rooms)?;
@@ -450,6 +449,12 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             writeln!(client.stream, "{response}")?;
             Ok(CommandResult::Handled)
         }
+
+        Command::Announce { message } => {
+            
+            Ok(CommandResult::Handled)
+        }
+
         Command::AccountRegister { .. } | Command::AccountLogin { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Already logged in".yellow())?;
@@ -1511,10 +1516,344 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
+        Command::ModInfo => {
+            let rooms_map = lock_rooms(rooms)?;
+            let room_arc = match rooms_map.get(room) {
+                Some(r) => Arc::clone(r),
+                None => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Room not found".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let mut changed = false;
+            let (banned, muted) = {
+                let mut room_guard = lock_room(&room_arc)?;
+                let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                    Ok(d) => d.as_secs(),
+                    Err(_) => 0,
+                };
+
+                let mut banned_vec = Vec::<String>::new();
+                let mut muted_vec  = Vec::<String>::new();
+
+                for (uname, rec) in room_guard.users.iter_mut() {
+                    // Ban handling
+                    if rec.banned {
+                        let still_banned = if rec.ban_length == 0 {
+                            true
+                        } else {
+                            let expire = rec.ban_stamp.saturating_add(rec.ban_length);
+                            if now >= expire {
+                                // Ban expired, clear flags
+                                rec.banned = false;
+                                rec.ban_stamp = 0;
+                                rec.ban_length = 0;
+                                rec.ban_reason.clear();
+                                changed = true;
+                                false
+                            } else {
+                                true
+                            }
+                        };
+
+                        if still_banned {
+                            let remaining = if rec.ban_length == 0 {
+                                "Permanent".to_string()
+                            } else {
+                                let rem = rec.ban_stamp.saturating_add(rec.ban_length) - now;
+                                let d = rem / 86_400;
+                                let h = (rem % 86_400) / 3_600;
+                                let m = (rem % 3_600) / 60;
+                                let s = rem % 60;
+                                format!("{d}d {h}h {m}m {s}s left")
+                            };
+                            let reason = if rec.ban_reason.is_empty() { "" } else { " - " };
+                            banned_vec.push(format!("{uname} ({remaining}){reason}{}", rec.ban_reason));
+                        }
+                    }
+
+                    // Mute handling
+                    if rec.muted {
+                        let still_muted = if rec.mute_length == 0 {
+                            true
+                        } else {
+                            let expire = rec.mute_stamp.saturating_add(rec.mute_length);
+                            if now >= expire {
+                                rec.muted = false;
+                                rec.mute_stamp = 0;
+                                rec.mute_length = 0;
+                                rec.mute_reason.clear();
+                                changed = true;
+                                false
+                            } else {
+                                true
+                            }
+                        };
+
+                        if still_muted {
+                            let remaining = if rec.mute_length == 0 {
+                                "Permanent".to_string()
+                            } else {
+                                let rem = rec.mute_stamp.saturating_add(rec.mute_length) - now;
+                                let d = rem / 86_400;
+                                let h = (rem % 86_400) / 3_600;
+                                let m = (rem % 3_600) / 60;
+                                let s = rem % 60;
+                                format!("{d}d {h}h {m}m {s}s left")
+                            };
+                            let reason = if rec.mute_reason.is_empty() { "" } else { " - " };
+                            muted_vec.push(format!("{uname} ({remaining}){reason}{}", rec.mute_reason));
+                        }
+                    }
+                }
+                (banned_vec, muted_vec)
+            };
+
+            if changed {
+                if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            }
+
+            let mut client = lock_client(&client)?;
+            if banned.is_empty() && muted.is_empty() {
+                writeln!(client.stream, "{}", "No users are currently banned or muted".green())?;
+            } else {
+                if !banned.is_empty() {
+                    writeln!(client.stream, "{}", "- Banned users -".green())?;
+                    for line in &banned {
+                        writeln!(client.stream, "  > {line}")?;
+                    }
+                }
+                if !muted.is_empty() {
+                    writeln!(client.stream, "{}", "- Muted users -".green())?;
+                    for line in &muted {
+                        writeln!(client.stream, "  > {line}")?;
+                    }
+                }
+            }
+
+            Ok(CommandResult::Handled)
+        }
+
+        Command::ModKick { username, reason } => {
+            let room_arc = {
+                let rooms_map = lock_rooms(rooms)?;
+                match rooms_map.get(room) {
+                    Some(r) => Arc::clone(r),
+                    None => {
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", "Room not found".yellow())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                }
+            };
+
+            {
+                let mut rg = lock_room(&room_arc)?;
+                if !rg.online_users.contains(&username) {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("{username} is not currently online").yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+                rg.online_users.retain(|u| u != &username);
+            }
+
+            if let Err(e) = unix_timestamp(rooms, room, &username) {
+                eprintln!("Failed to update last_seen for {username} in {room}: {e}");
+            }
+
+            let clients_map = lock_clients(clients)?;
+            let mut kicked = false;
+            for c_arc in clients_map.values() {
+                let mut c = match c_arc.lock() {
+                    Ok(g) => g,
+                    Err(p) => {
+                        eprintln!("Poisoned client lock: {p}");
+                        continue;
+                    }
+                };
+
+                if let ClientState::InRoom { username: u, room: rnm, .. } = &c.state {
+                    if u == &username && rnm == room {
+                        let msg = if reason.trim().is_empty() {
+                            format!("You have been kicked from {room}")
+                        } else {
+                            format!("You have been kicked from {room}: {reason}")
+                        };
+                        writeln!(c.stream, "{}", msg.red())?;
+                        c.state = ClientState::LoggedIn { username: username.clone() };
+                        kicked = true;
+                        break;
+                    }
+                }
+            }
+            drop(clients_map);
+
+            {
+                let rooms_map = lock_rooms(rooms)?;
+                if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            }
+
+            let mut client = lock_client(&client)?;
+            if kicked {
+                if reason.trim().is_empty() {
+                    writeln!(client.stream, "{}", format!("Kicked {username}").green())?;
+                } else {
+                    writeln!(client.stream, "{}", format!("Kicked {username}: {reason}").green())?;
+                }
+            } else {
+                writeln!(client.stream, "{}", format!("Failed to kick {username}").yellow())?;
+            }
+
+            Ok(CommandResult::Handled)
+        }
+
+        Command::ModBan { username, duration, reason } => {
+            let room_arc = {
+                let rooms_map = lock_rooms(rooms)?;
+                match rooms_map.get(room) {
+                    Some(r) => Arc::clone(r),
+                    None => {
+                        let mut cli = lock_client(&client)?;
+                        writeln!(cli.stream, "{}", "Room not found".yellow())?;
+                        return Ok(CommandResult::Handled);
+                    }
+                }
+            };
+
+            let ban_secs = match parse_duration(&duration) {
+                Ok(v) => v,
+                Err(e) => {
+                    let mut cli = lock_client(&client)?;
+                    writeln!(cli.stream, "{}", format!("Bad duration: {e}").yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            let now = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(d) => d.as_secs(),
+                Err(_) => 0,
+            };
+
+            // Apply/create ban record
+            {
+                let mut rg = lock_room(&room_arc)?;
+
+                // Add entry if not present
+                let user_rec = rg.users.entry(username.clone()).or_insert(RoomUser {
+                    nick: "".to_string(),
+                    color: "".to_string(),
+                    role: "user".to_string(),
+                    hidden: false,
+                    last_seen: now,
+                    banned: false,
+                    ban_stamp: 0,
+                    ban_length: 0,
+                    ban_reason: "".to_string(),
+                    muted: false,
+                    mute_stamp: 0,
+                    mute_length: 0,
+                    mute_reason: "".to_string(),
+                });
+
+                user_rec.banned      = true;
+                user_rec.ban_stamp   = now;
+                user_rec.ban_length  = ban_secs;
+                user_rec.ban_reason  = reason.clone();
+                user_rec.last_seen   = now;
+
+                // Remove from online list if present
+                rg.online_users.retain(|u| u != &username);
+            }
+
+            // Refresh last_seen helper
+            let _ = unix_timestamp(rooms, room, &username);
+
+            // Kick client if online
+            let clients_map = lock_clients(clients)?;
+            let human_len = if ban_secs == 0 {
+                "PERMANENT".to_string()
+            } else {
+                let mut rem = ban_secs;
+                let d = rem / 86_400;
+                rem %= 86_400;
+                let h = rem / 3_600;
+                rem %= 3_600;
+                let m = rem / 60;
+                let s = rem % 60;
+                format!("{}d {}h {}m {}s", d, h, m, s)
+            };
+
+            for c_arc in clients_map.values() {
+                let mut c = match c_arc.lock() {
+                    Ok(g) => g,
+                    Err(_) => continue,
+                };
+                if let ClientState::InRoom { username: u, room: rnm, .. } = &c.state {
+                    if u == &username && rnm == room {
+                        let msg = if reason.trim().is_empty() {
+                            format!("You have been banned from {room} ({human_len})")
+                        } else {
+                            format!("You have been banned from {room} ({reason})\n> {human_len}")
+                        };
+                        writeln!(c.stream, "{}", msg.red())?;
+                        c.state = ClientState::LoggedIn { username: username.clone() };
+                        break;
+                    }
+                }
+            }
+            drop(clients_map);
+
+            {
+                let rooms_map = lock_rooms(rooms)?;
+                if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                    let mut cli = lock_client(&client)?;
+                    writeln!(cli.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            }
+
+            let mut cli = lock_client(&client)?;
+            let len_disp = if ban_secs == 0 {
+                "PERMANENT".to_string()
+            } else {
+                format!("{ban_secs} sec")
+            };
+            if reason.trim().is_empty() {
+                writeln!(cli.stream, "{}", format!("Banned {username} ({len_disp})").green())?;
+            } else {
+                writeln!(cli.stream, "{}", format!("Banned {username} ({len_disp}): {reason}").green())?;
+            }
+
+            Ok(CommandResult::Handled)
+        }
+
+        Command::ModUnban { username } => {
+            
+            Ok(CommandResult::Handled)
+        }
+
+        Command::ModMute { username, duration, reason } => {
+            
+            Ok(CommandResult::Handled)
+        }
+
+        Command::ModUnmute { username } => {
+            
+            Ok(CommandResult::Handled)
+        }
+
         Command::Account | Command::AccountLogout | Command::AccountEditUsername { .. } | Command::AccountEditPassword { .. } | Command::AccountImport { .. } | Command::AccountExport { .. } | Command::AccountDelete { .. } |
-        Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } |
-        Command::Announce { .. } | Command::Me { .. } |
-        Command::ModInfo | Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
+        Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } => {
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", "Must be in the lobby to perform this command".yellow())?;
             Ok(CommandResult::Handled)
