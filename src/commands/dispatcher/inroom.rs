@@ -782,7 +782,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             let room_arc = match rooms_map.get(room) {
                 Some(r) => Arc::clone(r),
                 None => {
-                    writeln!(lock_client(&client)?.stream, "{}", format!("Room {room} not found").yellow())?;
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room {room} not found").yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             };
@@ -849,7 +850,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 let room_arc    = match rooms_map.get(room) {
                     Some(r) => Arc::clone(r),
                     None => {
-                        writeln!(lock_client(&client)?.stream, "{}", format!("Room {room} not found").yellow())?;
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", format!("Room {room} not found").yellow())?;
                         return Ok(CommandResult::Handled);
                     }
                 };
@@ -873,7 +875,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             if !added.is_empty() {
                 let rooms_map = lock_rooms(rooms)?;
                 if let Err(e) = save_rooms_to_disk(&rooms_map) {
-                    writeln!(lock_client(&client)?.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Failed to save rooms: {e}").red())?;
                     return Ok(CommandResult::Handled);
                 }
             }
@@ -914,7 +917,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 let room_arc    = match rooms_map.get(room) {
                     Some(r) => Arc::clone(r),
                     None => {
-                        writeln!(lock_client(&client)?.stream, "{}", format!("Room {room} not found").yellow())?;
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", format!("Room {room} not found").yellow())?;
                         return Ok(CommandResult::Handled);
                     }
                 };
@@ -938,7 +942,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             if !removed.is_empty() {
                 let rooms_map = lock_rooms(rooms)?;
                 if let Err(e) = save_rooms_to_disk(&rooms_map) {
-                    writeln!(lock_client(&client)?.stream, "{}", format!("Failed to save rooms: {}", e).red())?;
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Failed to save rooms: {}", e).red())?;
                     return Ok(CommandResult::Handled);
                 }
             }
@@ -954,25 +959,28 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         
         Command::SuperRolesAssign { role, users } => {
             let target_role = match role.to_lowercase().as_str() {
-                "user" => "user",
+                "usr" | "user" => "user",
                 "mod" | "moderator" => "moderator",
-                "admin" => "admin",
-                "owner" => "owner",
+                "admin" | "administrator" => "admin",
+                "owner" | "creator" | "founder" => "owner",
                 _ => {
-                    writeln!(lock_client(&client)?.stream, "{}", "Error: Role must be user|mod|admin|owner".yellow())?;
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Role must be user|mod|admin|owner".yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             };
 
             let users_vec: Vec<&str> = users.split_whitespace().collect();
             if users_vec.is_empty() {
-                writeln!(lock_client(&client)?.stream, "{}", "Error: No users specified".yellow())?;
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", "Error: No users specified".yellow())?;
                 return Ok(CommandResult::Handled);
             }
 
             if target_role == "owner" {
                 if users_vec.len() != 1 {
-                    writeln!(lock_client(&client)?.stream, "{}", "Error: Only 1 user may be assigned to owner".yellow())?;
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Only 1 user may be assigned to owner".yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             }
@@ -984,7 +992,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 let room_arc    = match rooms_map.get(room) {
                     Some(r) => Arc::clone(r),
                     None => {
-                        writeln!(lock_client(&client)?.stream, "{}", format!("Room {room} not found").yellow())?;
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", format!("Room {room} not found").yellow())?;
                         return Ok(CommandResult::Handled);
                     }
                 };
@@ -994,7 +1003,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                     match room_guard.users.get(username) {
                         Some(u) if u.role == "owner" => (),
                         _ => {
-                            writeln!(lock_client(&client)?.stream, "{}", "Error: Only the room owner can transfer ownership".yellow())?;
+                            let mut client = lock_client(&client)?;
+                            writeln!(client.stream, "{}", "Error: Only the room owner can transfer ownership".yellow())?;
                             return Ok(CommandResult::Handled);
                         }
                     }
@@ -1064,7 +1074,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             if !assigned.is_empty() {
                 let rooms_map = lock_rooms(rooms)?;
                 if let Err(e) = save_rooms_to_disk(&rooms_map) {
-                    writeln!(lock_client(&client)?.stream, "{}", format!("Failed to save rooms: {e}").red())?;
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Failed to save rooms: {e}").red())?;
                     return Ok(CommandResult::Handled);
                 }
             }
@@ -1094,7 +1105,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
 
             let hex = color.trim().trim_start_matches('#');
             if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
-                writeln!(lock_client(&client)?.stream, "{}", "Error: Color must be a 6‑digit hex value".yellow())?;
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", "Error: Color must be a 6‑digit hex value".yellow())?;
                 return Ok(CommandResult::Handled);
             }
             let hex_with_hash = format!("#{hex}");
@@ -1105,7 +1117,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 let room_arc    = match rooms_map.get(room) {
                     Some(r) => Arc::clone(r),
                     None => {
-                        writeln!(lock_client(&client)?.stream, "{}", format!("Room {room} not found").yellow())?;
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", format!("Room {room} not found").yellow())?;
                         return Ok(CommandResult::Handled);
                     }
                 };

@@ -4,7 +4,7 @@ use std::fs::{File, OpenOptions};
 use serde::Serialize;
 use serde_json::{json, Serializer, Value};
 use serde_json::ser::PrettyFormatter;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::sync::{Arc, Mutex};
 use colored::*;
 
@@ -468,7 +468,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             let room_arc = match rooms.get(&name) {
                 Some(r) => Arc::clone(r),
                 None => {
-                    writeln!(lock_client(&client)?.stream, "{}", format!("Room {} not found", name).yellow())?;
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Room {} not found", name).yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             };
@@ -476,7 +477,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             let mut room = match room_arc.lock() {
                 Ok(r) => r,
                 Err(_) => {
-                    writeln!(lock_client(&client)?.stream, "{}", "Error: Could not lock room".red())?;
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Could not lock room".red())?;
                     return Ok(CommandResult::Handled);
                 }
             };
@@ -487,8 +489,82 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             };
 
             if room.whitelist_enabled && !room.whitelist.contains(username) && !is_owner {
-                writeln!(lock_client(&client)?.stream, "{}", "You aren't whitelisted for this room".red())?;
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", "You aren't whitelisted for this room".red())?;
                 return Ok(CommandResult::Handled);
+            }
+
+            let now_ts: u64 = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(d)  => d.as_secs(),
+                Err(_) => 0,
+            };
+
+            if let Some(rec) = room.users.get_mut(username) {
+                let mut inf = false;
+                let mut ban_expires: u64 = 0;
+                if rec.banned {
+                    if rec.ban_length == 0 {
+                        inf = true;
+                    } else {
+                        ban_expires = rec.ban_stamp.saturating_add(rec.ban_length as u64)
+                    }
+
+                    if now_ts < ban_expires || inf {
+                        let remaining_text = if inf {
+                            "Permanent".to_string()
+                        } else {
+                            let remaining_secs = ban_expires.saturating_sub(now_ts);
+                            let days = remaining_secs / 86_400;
+                            let hrs = (remaining_secs % 86_400) / 3_600;
+                            let mins = (remaining_secs % 3_600) / 60;
+                            let secs = remaining_secs % 60;
+
+                            if days > 0 {
+                                format!("{}d {}h {}m {}s remaining", days, hrs, mins, secs)
+                            } else if hrs > 0 {
+                                format!("{}h {}m {}s remaining", hrs, mins, secs)
+                            } else if mins > 0 {
+                                format!("{}m {}s remaining", mins, secs)
+                            } else {
+                                format!("{}s remaining", secs)
+                            }
+                        };
+
+                        let reason_txt = if rec.ban_reason.is_empty() {
+                            format!("You are banned from this room ({})", remaining_text)
+                        } else {
+                            format!("You are banned from this room ({})\n> {}", rec.ban_reason, remaining_text)
+                        };
+
+                        let mut client = lock_client(&client)?;
+                        writeln!(client.stream, "{}", reason_txt.red())?;
+                        return Ok(CommandResult::Handled);
+                    }
+
+                    rec.banned      = false;
+                    rec.ban_stamp   = 0;
+                    rec.ban_length  = 0;
+                    rec.ban_reason.clear();
+
+                    let file = File::open("data/rooms.json")?;
+                    let reader = BufReader::new(file);
+                    let mut rooms_json: Value = serde_json::from_reader(reader)?;
+
+                    if let Some(room_json) = rooms_json.get_mut(&name) {
+                        if let Some(user_json) = room_json["users"].get_mut(username) {
+                            user_json["banned"]      = json!(false);
+                            user_json["ban_stamp"]   = json!(0);
+                            user_json["ban_length"]  = json!(0);
+                            user_json["ban_reason"]  = json!("");
+                        }
+                    }
+
+                    let file = OpenOptions::new().write(true).truncate(true).open("data/rooms.json")?;
+                    let mut writer = std::io::BufWriter::new(file);
+                    let formatter = PrettyFormatter::with_indent(b"    ");
+                    let mut ser = Serializer::with_formatter(&mut writer, formatter);
+                    rooms_json.serialize(&mut ser)?;
+                }
             }
 
             // Add user to room's rooms.json users list if it's their first time joining
@@ -645,7 +721,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             let room_arc = match rooms.get(&name) {
                 Some(r) => Arc::clone(r),
                 None => {
-                    writeln!(lock_client(&client)?.stream, "{}", format!("Error: Room {} not found", name).yellow())?;
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("Error: Room {} not found", name).yellow())?;
                     return Ok(CommandResult::Handled);
                 }
             };
