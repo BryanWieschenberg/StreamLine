@@ -5,8 +5,10 @@ use std::io;
 use std::io::{Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use colored::Colorize;
+
 use crate::types::{Clients, Client, ClientState, Rooms, Room, USERS_LOCK, ROOMS_LOCK};
-use crate::commands::command_utils::{save_rooms_to_disk};
+use crate::commands::command_utils::{save_rooms_to_disk, ColorizeExt};
 
 pub fn broadcast_message(clients: &Clients, room_name: &str, sender: &str, msg: &str, include_sender: bool, bypass_ignores: bool) -> io::Result<()> {
     let client_arcs: Vec<Arc<Mutex<Client>>> =
@@ -102,6 +104,47 @@ pub fn check_mute(rooms: &Rooms, room: &str, username: &str) -> io::Result<Optio
     }
 
     Ok(still_muted_msg)
+}
+
+pub fn format_broadcast(rooms: &Rooms, room_name: &str, username: &str) -> io::Result<(String, String)> {
+    let rooms_map = lock_rooms(rooms)?;
+    let room_arc = match rooms_map.get(room_name) {
+        Some(r) => Arc::clone(r),
+        None => return Ok(("".to_string(), username.green().to_string())),
+    };
+
+    let rg = lock_room(&room_arc)?;
+    let user_info = rg.users.get(username);
+
+    let mut prefix_colored = "".to_string();
+    let mut display_name = username.green().to_string();
+
+    if let Some(info) = user_info {
+        // Role prefix and color
+        let role_key = info.role.to_lowercase();
+        if let Some(hex) = rg.roles.colors.get(&role_key) {
+            let prefix = match role_key.as_str() {
+                "owner" => "[Owner]",
+                "admin" => "[Admin]",
+                "mod" | "moderator" => "[Mod]",
+                _ => "[User]",
+            };
+            prefix_colored = prefix.truecolor_from_hex(hex).to_string();
+        }
+
+        // Nick italicized or fallback to username
+        if !info.nick.is_empty() {
+            if !info.color.is_empty() {
+                display_name = info.nick.as_str().truecolor_from_hex(&info.color).italic().to_string();
+            } else {
+                display_name = info.nick.italic().to_string();
+            }
+        } else if !info.color.is_empty() {
+            display_name = username.truecolor_from_hex(&info.color).to_string();
+        }
+    }
+
+    Ok((prefix_colored, display_name))
 }
 
 pub fn lock_clients(clients: &Clients) -> std::io::Result<std::sync::MutexGuard<'_, HashMap<SocketAddr, Arc<Mutex<Client>>>>> {

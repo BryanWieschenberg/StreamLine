@@ -12,7 +12,7 @@ use crate::commands::command_utils::{unix_timestamp};
 mod types;
 use crate::types::{Clients, Client, ClientState, Rooms, Room};
 mod utils;
-use crate::utils::{broadcast_message, check_mute, lock_client, lock_clients, lock_room, lock_rooms};
+use crate::utils::{broadcast_message, check_mute, format_broadcast, lock_client, lock_clients, lock_room, lock_rooms};
 
 pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()> {
     loop {
@@ -184,6 +184,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                 
                 if let ClientState::InRoom { username, room, .. } = &sender.state {
                     let username = username.clone();
+                    let username_bc = username.clone();
                     let room_name = room.clone();
                     drop(sender);
 
@@ -193,8 +194,10 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                         continue;
                     }
 
-                    let full_msg = format!("{}: {}", username, msg);
-                    if let Err(e) = broadcast_message(&clients, &room_name, &username, &full_msg, false, false) {
+                    let (role_prefix, display_name) = format_broadcast(&rooms, &room_name, &username)?;
+                    let full_msg = format!("{role_prefix} {display_name}: {msg}");
+
+                    if let Err(e) = broadcast_message(&clients, &room_name, &username_bc, &full_msg, false, false) {
                         eprintln!("Error broadcasting message from {peer}: {e}");
                         break;
                     }

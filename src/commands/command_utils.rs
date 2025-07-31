@@ -112,6 +112,12 @@ pub trait ColorizeExt {
     fn truecolor_from_hex(self, hex: &str) -> colored::ColoredString;
 }
 
+impl ColorizeExt for &str {
+    fn truecolor_from_hex(self, hex: &str) -> colored::ColoredString {
+        self.to_string().truecolor_from_hex(hex)
+    }
+}
+
 impl<'a> ColorizeExt for String {
     fn truecolor_from_hex(self, hex: &str) -> colored::ColoredString {
         let hex = hex.trim_start_matches('#');

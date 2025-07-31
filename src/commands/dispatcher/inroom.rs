@@ -1140,7 +1140,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         Command::SuperRolesAssign { role, users } => {
             let target_role = match role.to_lowercase().as_str() {
                 "usr" | "user" => "user",
-                "mod" | "moderator" => "moderator",
+                "mod" | "moderator" => "mod",
                 "admin" | "administrator" => "admin",
                 "owner" | "creator" | "founder" => "owner",
                 _ => {
