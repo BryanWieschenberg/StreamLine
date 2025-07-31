@@ -10,7 +10,7 @@ use serde_json::ser::PrettyFormatter;
 use colored::*;
 
 use crate::commands::parser::Command;
-use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS, unix_timestamp, parse_duration};
+use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS, unix_timestamp, parse_duration, check_mute};
 use crate::types::{Client, Clients, ClientState, Rooms, RoomUser};
 use crate::utils::{broadcast_message, lock_client, lock_clients, lock_room, lock_rooms, lock_rooms_storage, lock_users_storage};
 use super::CommandResult;
@@ -402,6 +402,12 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         }
 
         Command::Me { action } => {
+            if let Some(msg) = check_mute(rooms, room, username)? {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", msg.red())?;
+                return Ok(CommandResult::Handled);
+            }
+
             let msg = format!("* {} {}", username, action).bright_green().to_string();
             broadcast_message(clients, room, username, &msg, true, false)?;
             Ok(CommandResult::Handled)
@@ -452,6 +458,12 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         }
 
         Command::Announce { message } => {
+            if let Some(msg) = check_mute(rooms, room, username)? {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", msg.red())?;
+                return Ok(CommandResult::Handled);
+            }
+
             let msg = format!("Announcement: {}", message).bright_yellow().to_string();
             broadcast_message(clients, room, username, &msg, true, true)?;
             Ok(CommandResult::Handled)
