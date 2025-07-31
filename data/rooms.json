@@ -45,7 +45,8 @@
                 "muted": false,
                 "mute_stamp": 0,
                 "mute_length": 0,
-                "mute_reason": ""
+                "mute_reason": "",
+                "pubkey": "BASE64_PUBLIC_KEY"
             },
             "balls": {
                 "nick": "",
@@ -60,7 +61,8 @@
                 "muted": false,
                 "mute_stamp": 0,
                 "mute_length": 0,
-                "mute_reason": ""
+                "mute_reason": "",
+                "pubkey": "BASE64_PUBLIC_KEY"
             },
             "jeff": {
                 "nick": "jeffy",
@@ -75,7 +77,8 @@
                 "muted": false,
                 "mute_stamp": 0,
                 "mute_length": 0,
-                "mute_reason": ""
+                "mute_reason": "",
+                "pubkey": "BASE64_PUBLIC_KEY"
             }
         }
     }

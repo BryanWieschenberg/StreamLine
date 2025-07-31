@@ -125,6 +125,8 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
                             .and_then(|v| v.as_array())
                             .map_or_else(Vec::new, |arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
                         writeln!(client.stream, "{}", format!("Logged in as: {}", username).green())?;
+                        // Have client generate/load privkey for this account
+                        writeln!(client.stream, "{}", format!("/LOGIN_OK {}", username))?;
                     } else {
                         let mut client = lock_client(&client)?;
                         writeln!(client.stream, "{}", "Error: Incorrect password".yellow())?;

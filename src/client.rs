@@ -3,15 +3,22 @@ use std::net::TcpStream;
 use std::{env, thread};
 use colored::Colorize;
 
-// mod crypto;
-// use crate::crypto::{encrypt, decrypt};
+mod crypto;
+use crate::crypto::{sayhi};
 
 // Function to handle receiving messages from the server
 fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
     let reader = BufReader::new(stream);
     for line in reader.lines() {
         match line {
-            Ok(msg) => println!("{msg}"),
+            Ok(msg) => {
+                if let Some(username) = msg.strip_prefix("/LOGIN_OK ") {
+                    sayhi(username);
+                    continue;
+                }
+
+                println!("{msg}")
+            }
             Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => break,
             Err(e) => {
                 eprintln!("Error reading line: {e}");
