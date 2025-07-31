@@ -2,8 +2,36 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::io;
+use std::io::{Write};
 
-use crate::types::{Clients, Client, Rooms, Room, USERS_LOCK, ROOMS_LOCK};
+use crate::types::{Clients, Client, ClientState, Rooms, Room, USERS_LOCK, ROOMS_LOCK};
+
+pub fn broadcast_message(clients: &Clients, room_name: &str, sender: &str, msg: &str, include_sender: bool, bypass_ignores: bool) -> io::Result<()> {
+    let client_arcs: Vec<Arc<Mutex<Client>>> =
+        match lock_clients(clients) {
+            Ok(map) => map.values().cloned().collect(),
+            Err(_)  => return Ok(()),
+        };
+
+    for arc in client_arcs {
+        let mut c = lock_client(&arc)?;
+        
+        if let ClientState::InRoom { username, room, .. } = &c.state {
+            if room != room_name { continue; }
+
+            if !include_sender && username == sender {
+                continue;
+            }
+
+            if !bypass_ignores && c.ignore_list.contains(&sender.to_string()) {
+                continue;
+            }
+
+            writeln!(c.stream, "{msg}")?;
+        }
+    }
+    Ok(())
+}
 
 pub fn lock_clients(clients: &Clients) -> std::io::Result<std::sync::MutexGuard<'_, HashMap<SocketAddr, Arc<Mutex<Client>>>>> {
     clients.lock().map_err(|e| {

@@ -159,18 +159,49 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 }
             };
             let color_display = if user_info.color.is_empty() {
-                "Default".italic().to_string()
-            }
-            else {
+                "Default".to_string()
+            } else {
                 format!("{}", user_info.color).truecolor_from_hex(&user_info.color).to_string()
             };
 
-            writeln!(client.stream, "{}\n{} {}\n{} {}\n{} {}\n{} {}",
-                format!("Status for '{}' in Room '{}':", username, room).green(),
-                "> Role:".green(), role,
-                "> Nickname:".green(), if user_info.nick.is_empty() { "None".italic().to_string() } else { user_info.nick.clone() },
-                "> Color:".green(), color_display,
-                "> Session:".green(), format!("{:0>2}:{:0>2}:{:0>2}", hrs, mins, secs)
+            let visibility = if user_info.hidden {
+                "True".yellow().to_string()
+            } else {
+                "False".green().to_string()
+            };
+
+            let mute_status = if user_info.muted {
+                if user_info.mute_length == 0 {
+                    "Muted (Permanent)".red().to_string()
+                } else {
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    let expire = user_info.mute_stamp.saturating_add(user_info.mute_length);
+                    if now >= expire {
+                        "Not Muted".green().to_string()
+                    } else {
+                        let rem = expire - now;
+                        let d = rem / 86_400;
+                        let h = (rem % 86_400) / 3_600;
+                        let m = (rem % 3_600) / 60;
+                        let s = rem % 60;
+                        format!("Muted ({}d {}h {}m {}s left)", d, h, m, s).red().to_string()
+                    }
+                }
+            } else {
+                "False".green().to_string()
+            };
+
+            writeln!(client.stream, "{}\n{} {}\n{} {}\n{} {}\n{} {}\n{} {}\n{} {}",
+                format!("Status for {} in {}:", username, room).green(),
+                "> Role:", role,
+                "> Nickname:", if user_info.nick.is_empty() { "None".to_string() } else { user_info.nick.italic().to_string() },
+                "> Color:", color_display,
+                "> Hidden:", visibility,
+                "> Mute:", mute_status,
+                "> Session:", format!("{:0>2}:{:0>2}:{:0>2}", hrs, mins, secs)
             )?;
             Ok(CommandResult::Handled)
         }
@@ -316,8 +347,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             let room_guard = lock_room(&room_arc)?;
 
             let mut cli = lock_client(&client)?;
-            writeln!(cli.stream, "{}", format!("User data for room '{}':", room).green())?;
-            writeln!(cli.stream, "{}", "=".repeat(50).green())?;
+            writeln!(cli.stream, "{}", format!("User data for {}:", room).green())?;
             drop(cli);
             
             let clients_map = lock_clients(clients)?;
@@ -336,33 +366,21 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 };
 
                 let color_display = if udata.color.is_empty() {
-                    "Default".italic().to_string()
+                    "Default".to_string()
                 } else {
                     format!("{}", udata.color).truecolor_from_hex(&udata.color).to_string()
                 };
 
                 let nickname = if udata.nick.is_empty() {
-                    "None".italic().to_string()
+                    "None".to_string()
                 } else {
-                    udata.nick.clone()
+                    udata.nick.italic().to_string()
                 };
 
                 let hidden_status = if udata.hidden {
-                    "Hidden".yellow().to_string()
+                    "True".yellow().to_string()
                 } else {
-                    "Visible".green().to_string()
-                };
-
-                let banned_status = if !udata.banned {
-                    "Not Banned".green().to_string()
-                } else {
-                    format!("Banned ({})", udata.banned).red().to_string()
-                };
-
-                let muted_status = if !udata.muted {
-                    "Not Muted".green().to_string()
-                } else {
-                    format!("Muted ({})", udata.muted).yellow().to_string()
+                    "False".green().to_string()
                 };
 
                 let afk_status = {
@@ -378,21 +396,42 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                         }
                     }
                     if afk {
-                        "AFK".yellow().to_string()
+                        "True".yellow().to_string()
                     } else {
-                        "Active".green().to_string()
+                        "False".green().to_string()
                     }
                 };
 
+                let session_time = {
+                    let mut secs = 0u64;
+                    for c_arc in clients_map.values() {
+                        if let Ok(c) = c_arc.lock() {
+                            if let ClientState::InRoom {username: u, room: rnm, room_time: Some(t), ..} = &c.state {
+                                if u == uname && rnm == room {
+                                    if let Ok(elapsed) = t.elapsed() {
+                                        secs = elapsed.as_secs();
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    let h = secs / 3600;
+                    let m = (secs % 3600) / 60;
+                    let s = secs % 60;
+                    format!("{:0>2}:{:0>2}:{:0>2}", h, m, s)
+                };
+
                 let mut cli = lock_client(&client)?;
-                writeln!(cli.stream, "{}", format!("User: {}", uname).cyan())?;
-                writeln!(cli.stream, "  > Role: {}", role)?;
-                writeln!(cli.stream, "  > Nickname: {}", nickname)?;
-                writeln!(cli.stream, "  > Color: {}", color_display)?;
-                writeln!(cli.stream, "  > Visibility: {}", hidden_status)?;
-                writeln!(cli.stream, "  > Ban Status: {}", banned_status)?;
-                writeln!(cli.stream, "  > Mute Status: {}", muted_status)?;
-                writeln!(cli.stream, "  > AFK Status: {}", afk_status)?;
+                writeln!(cli.stream, "> {} - Role: {}, Nickname: {}, Color: {}, Hidden: {}, AFK: {}, Session: {}",
+                    uname.green(),
+                    role,
+                    nickname,
+                    color_display,
+                    hidden_status,
+                    afk_status,
+                    session_time
+                )?;
             }
 
             Ok(CommandResult::Handled)

@@ -62,14 +62,14 @@
                 "ban_reason": "",
                 "ban_stamp": 0,
                 "banned": false,
-                "color": "",
+                "color": "#00A6FF",
                 "hidden": false,
                 "last_seen": 1753904581,
                 "mute_length": 0,
                 "mute_reason": "",
                 "mute_stamp": 0,
                 "muted": false,
-                "nick": "",
+                "nick": "jungleballz",
                 "role": "admin"
             }
         },
