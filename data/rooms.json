@@ -25,37 +25,22 @@
                 "user"
             ],
             "colors": {
-                "user": "#FFCCCC",
-                "owner": "#FFBB00",
+                "mod": "#0080FF",
                 "admin": "#FF3030",
-                "mod": "#0080FF"
+                "owner": "#FFBB00",
+                "user": "#FFCCCC"
             }
         },
         "users": {
-            "bryan": {
-                "nick": "poopnick",
-                "color": "#FF5C77",
-                "role": "admin",
-                "hidden": false,
-                "last_seen": 1753974054,
-                "banned": false,
-                "ban_stamp": 0,
-                "ban_length": 0,
-                "ban_reason": "",
-                "muted": false,
-                "mute_stamp": 0,
-                "mute_length": 0,
-                "mute_reason": ""
-            },
             "jeff": {
                 "nick": "jungleballz",
                 "color": "#00A6FF",
                 "role": "admin",
                 "hidden": false,
-                "last_seen": 1753975978,
-                "banned": true,
-                "ban_stamp": 1753975978,
-                "ban_length": 1,
+                "last_seen": 1753976905,
+                "banned": false,
+                "ban_stamp": 0,
+                "ban_length": 0,
                 "ban_reason": "",
                 "muted": false,
                 "mute_stamp": 0,
@@ -68,6 +53,21 @@
                 "role": "user",
                 "hidden": false,
                 "last_seen": 0,
+                "banned": false,
+                "ban_stamp": 0,
+                "ban_length": 0,
+                "ban_reason": "",
+                "muted": false,
+                "mute_stamp": 0,
+                "mute_length": 0,
+                "mute_reason": ""
+            },
+            "bryan": {
+                "nick": "poopnick",
+                "color": "#FF5C77",
+                "role": "admin",
+                "hidden": false,
+                "last_seen": 1753974054,
                 "banned": false,
                 "ban_stamp": 0,
                 "ban_length": 0,

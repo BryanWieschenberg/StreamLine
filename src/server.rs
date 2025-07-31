@@ -187,7 +187,8 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                     let room_name = room.clone();
                     drop(sender);
 
-                    if let Err(e) = broadcast_message(&clients, &room_name, &username, &msg, false, false) {
+                    let full_msg = format!("{}: {}", username, msg);
+                    if let Err(e) = broadcast_message(&clients, &room_name, &username, &full_msg, false, false) {
                         eprintln!("Error broadcasting message from {peer}: {e}");
                         break;
                     }

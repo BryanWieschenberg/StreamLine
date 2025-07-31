@@ -228,11 +228,13 @@ pub fn parse_command(input: &str) -> Command {
             Command::InvalidSyntax { err_msg }
         },
 
-        ["announce", message @ ..] if !message.is_empty() => Command::Announce {
+        ["announce", message @ ..] |
+        ["an", message @ ..] if !message.is_empty() => Command::Announce {
             message: message.join(" ")
         },
 
-        ["announce", ..] => {
+        ["announce", ..] |
+        ["an", ..] => {
             let err_msg = format!("{}", "Usage: /announce <message>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
