@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::{BufReader, BufRead, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
-use std::thread;
+use std::{env, thread};
 use std::time::{SystemTime, Instant, Duration};
 use colored::Colorize;
 mod commands;
@@ -253,7 +253,21 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
 // Main function to set up the TCP server and handle incoming connections
 fn main() -> std::io::Result<()> {
-    let port = 8000;
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 2 {
+        eprintln!("Usage: ./cargo run --bin server -q <port>?");
+        std::process::exit(1);
+    }
+
+    let port: u16 = if args.len() == 2 {
+        match args[1].parse::<u16>() {
+            Ok(p) => p,
+            Err(_) => 8000,
+        }
+    } else {
+        8000
+    };
+    
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))?;
 
     let clients: Clients = Arc::new(Mutex::new(HashMap::new()));

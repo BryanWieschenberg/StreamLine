@@ -26,13 +26,29 @@ fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
 // Main function to connect to the server and read/receive user input
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("Usage: client <ip:port>");
+    if args.len() > 2 {
+        eprintln!("Usage: ./cargo run --bin client -q <ip:port>?");
         std::process::exit(1);
     }
 
-    let address = &args[1];
-    let mut stream = TcpStream::connect(address)?;
+    let address = if args.len() == 2 {
+        let arg = &args[1];
+        match arg.parse::<u16>() {
+            Ok(port) => format!("127.0.0.1:{}", port),
+            Err(_) => {
+                if arg.contains(':') {
+                    arg.clone()
+                } else {
+                    eprintln!("Invalid format. Use <ip:port> or <port>.");
+                    std::process::exit(1);
+                }
+            }
+        }
+    } else {
+        "127.0.0.1:8000".to_string()
+    };
+
+    let mut stream = TcpStream::connect(&address)?;
     let stream_clone = stream.try_clone()?;
 
     println!("{}", "
