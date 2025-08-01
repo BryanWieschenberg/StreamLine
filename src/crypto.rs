@@ -8,8 +8,9 @@ use once_cell::sync::OnceCell;
 use base64::{engine::general_purpose, Engine as _};
 use rand::rngs::OsRng;
 use rsa::pkcs8::DecodePrivateKey;
-use rsa::{pkcs8::EncodePublicKey, RsaPrivateKey};
-use pkcs8::EncodePrivateKey;
+use rsa::{pkcs8::EncodePublicKey, RsaPrivateKey, Oaep, RsaPublicKey};
+use pkcs8::{DecodePublicKey, EncodePrivateKey};
+use sha2::Sha256;
 
 // Client holds its own private key in memory
 static MY_PRIVKEY: OnceCell<RsaPrivateKey> = OnceCell::new();
@@ -89,4 +90,31 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
     fs::set_permissions("data/keys.json", fs::Permissions::from_mode(0o600))?;
 
     Ok(pub_b64)
+}
+
+pub fn encrypt(msg: &str, recipient_pubkey: &str) -> Result<String, Box<dyn std::error::Error>> {
+    // Decode recipient’s pubkey
+    let der = general_purpose::STANDARD.decode(recipient_pubkey)?;
+    let pub_key = RsaPublicKey::from_public_key_der(&der)?;
+
+    // Encrypt with RSA-OAEP-SHA256
+    let ciphertext = pub_key.encrypt(&mut OsRng, Oaep::new::<Sha256>(), msg.as_bytes())?;
+
+    // Return Base64 ciphertext
+    Ok(general_purpose::STANDARD.encode(ciphertext))
+}
+
+pub fn decrypt(msg: &str, recipient_privkey: &str) -> Result<String, Box<dyn std::error::Error>> {
+    // Decode recipient's privkey
+    let der = general_purpose::STANDARD.decode(recipient_privkey)?;
+    let priv_key = RsaPrivateKey::from_pkcs8_der(&der)?;
+
+    // Decode ciphertext from Base64 to bytes
+    let cipherbytes = general_purpose::STANDARD.decode(msg)?;
+
+    // Decrypt with RSA-OAEP-SHA256
+    let plaintext_bytes = priv_key.decrypt(Oaep::new::<Sha256>(), &cipherbytes)?;
+
+    // Convert from UTF-8 bytes and return String
+    Ok(String::from_utf8(plaintext_bytes)?)
 }

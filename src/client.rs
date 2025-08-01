@@ -95,11 +95,11 @@ fn main() -> std::io::Result<()> {
 
     println!("{}", "
         Welcome to StreamLine!\n
-        Make an account with /account register <username> <password> <confirm password> or
-        login with /account login <username> <password> and
-        make a room with /room create <room name>,
-        join a room with /room join <room name>,
-        or see a list of rooms with /room\n
+        Make an account with /account register <username> <password> <confirm password>
+        Login with /account login <username> <password>
+        Make a room with /room create <room name>
+        Join a room with /room join <room name>
+        See a list of rooms with /room\n
         For a list of all available commands, type /help
     ".bright_blue());
         
