@@ -12,7 +12,7 @@ use crate::commands::command_utils::{unix_timestamp};
 mod types;
 use crate::types::{Client, ClientState, Clients, PublicKeys, Room, Rooms};
 mod utils;
-use crate::utils::{broadcast_message, check_mute, format_broadcast, lock_client, lock_clients, lock_room, lock_rooms};
+use crate::utils::{check_mute, format_broadcast, lock_client, lock_clients, lock_room, lock_rooms};
 
 pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()> {
     loop {
@@ -168,6 +168,40 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                 }
 
                 if msg.starts_with("/") {
+                    if msg == "/members?" {
+                        let (_username, room_name) = {
+                            let client = lock_client(&client_arc)?;
+                            match &client.state {
+                                ClientState::InRoom { username, room, .. } => (username.clone(), room.clone()),
+                                _ => {
+                                    writeln!(lock_client(&client_arc)?.stream, "{}", "You are not in a room.".yellow())?;
+                                    continue;
+                                }
+                            }
+                        };
+
+                        // Build list of user:pubkey for everyone in the same room
+                        let clients_map = lock_clients(&clients)?;
+                        let pubkeys_map = pubkeys.lock().unwrap(); // PublicKeys = Arc<Mutex<HashMap<String,String>>>
+                        
+                        let mut pairs = Vec::new();
+                        for client_arc in clients_map.values() {
+                            let client = client_arc.lock().unwrap();
+                            if let ClientState::InRoom { username: u, room: r, .. } = &client.state {
+                                if *r == room_name {
+                                    // Lookup pubkey
+                                    let key_b64 = pubkeys_map.get(u).cloned().unwrap_or_default();
+                                    pairs.push(format!("{u}:{key_b64}"));
+                                }
+                            }
+                        }
+
+                        // Send `/members user1:pubkey user2:pubkey ...` line
+                        let line = format!("/members {}", pairs.join(" "));
+                        writeln!(lock_client(&client_arc)?.stream, "{line}")?;
+                        continue;
+                    }
+
                     let command: Command = parse_command(&msg);
                     
                     match dispatch_command(command, Arc::clone(&client_arc), &clients, &rooms, &pubkeys)? {
@@ -185,7 +219,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                 
                 if let ClientState::InRoom { username, room, .. } = &sender.state {
                     let username = username.clone();
-                    let username_bc = username.clone();
                     let room_name = room.clone();
                     drop(sender);
 
@@ -196,11 +229,25 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                     }
 
                     let (role_prefix, display_name) = format_broadcast(&rooms, &room_name, &username)?;
-                    let full_msg = format!("{role_prefix} {display_name}: {msg}");
+                    let mut parts = msg.splitn(2, ' ');
+                    let recipient   = parts.next().unwrap_or("");
+                    let ciphertext  = parts.next().unwrap_or("");
 
-                    if let Err(e) = broadcast_message(&clients, &room_name, &username_bc, &full_msg, false, false) {
-                        eprintln!("Error broadcasting message from {peer}: {e}");
-                        break;
+                    if recipient.is_empty() || ciphertext.is_empty() {
+                        continue;
+                    }
+
+                    let clients_map = lock_clients(&clients)?;
+                    if let Some(rec_arc) = clients_map.values().find(|arc| {
+                        let c = arc.lock().unwrap();
+                        matches!(&c.state,
+                            ClientState::InRoom { username: u, room: r, .. }
+                            if u == recipient && r == &room_name)
+                    }).cloned()
+                    {
+                        let mut rec = lock_client(&rec_arc)?;
+                        println!("{} {}: {}", role_prefix, display_name, ciphertext);
+                        writeln!(rec.stream, "{} {}: {}", role_prefix, display_name, ciphertext)?;
                     }
                 }
                 else if let ClientState::LoggedIn { .. } = &sender.state {

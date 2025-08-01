@@ -4,10 +4,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::io;
 use std::io::{Write};
 use std::time::{SystemTime, UNIX_EPOCH};
-
 use colored::Colorize;
-
-use crate::types::{Clients, Client, ClientState, Rooms, Room, USERS_LOCK, ROOMS_LOCK};
+use crate::types::{Client, ClientState, Clients, Room, Rooms, ROOMS_LOCK, USERS_LOCK};
 use crate::commands::command_utils::{save_rooms_to_disk, ColorizeExt};
 
 pub fn broadcast_message(clients: &Clients, room_name: &str, sender: &str, msg: &str, include_sender: bool, bypass_ignores: bool) -> io::Result<()> {

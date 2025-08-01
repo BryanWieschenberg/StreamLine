@@ -1,10 +1,32 @@
+use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpStream;
+use std::sync::{Condvar, Mutex};
 use std::{env, thread};
+use base64::Engine;
 use colored::Colorize;
+use once_cell::sync::Lazy;
 use std::time::{SystemTime, UNIX_EPOCH};
 mod crypto;
-use crate::crypto::{generate_or_load_keys};
+use crate::crypto::{generate_or_load_keys, encrypt, decrypt};
+
+static MEMBERS: Lazy<(Mutex<HashMap<String, String>>, Condvar)> = Lazy::new(|| (Mutex::new(HashMap::new()), Condvar::new()));
+
+fn looks_like_base64(s: &str) -> bool {
+    base64::engine::general_purpose::STANDARD.decode(s).is_ok()
+}
+
+fn get_room_members_blocking() -> HashMap<String, String> {
+    let (lock, cvar) = &*MEMBERS;
+    let mut members = lock.lock().unwrap();
+
+    // wait until members is not empty
+    while members.is_empty() {
+        members = cvar.wait(members).unwrap();
+    }
+
+    members.clone() // return a copy
+}
 
 fn handle_control_packets(stream: &mut TcpStream, msg: &str) -> std::io::Result<()> {
     // Ping FRT latency calculation
@@ -34,6 +56,22 @@ fn handle_control_packets(stream: &mut TcpStream, msg: &str) -> std::io::Result<
         }
         return Ok(());
     }
+
+    if let Some(rest) = msg.strip_prefix("/members ") {
+        let mut map = HashMap::new();
+        for pair in rest.split_whitespace() {
+            if let Some((user, pubkey)) = pair.split_once(':') {
+                map.insert(user.to_string(), pubkey.to_string());
+            }
+        }
+
+        let (lock, cvar) = &*MEMBERS;
+        let mut members = lock.lock().unwrap();
+        *members = map;
+        cvar.notify_all(); // Let main send thread continue
+        return Ok(());
+    }
+
     Ok(())
 }
 
@@ -52,7 +90,22 @@ fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
                     continue;
                 }
 
-                println!("{msg}")
+                if let Some((prefix, cipher_b64)) = msg.split_once(": ") {
+                    if looks_like_base64(cipher_b64) {
+                        match decrypt(cipher_b64) {
+                            Ok(plaintext) => println!("{}: {}", prefix, plaintext),
+                            Err(e) => {
+                                eprintln!("Decryption error: {e}");
+                                continue;
+                            }
+                        }
+                    } else {
+                        // Not encrypted — show raw
+                        println!("{msg}");
+                    }
+                } else {
+                    println!("{}", msg);
+                }
             }
             Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => break,
             Err(e) => {
@@ -111,24 +164,57 @@ fn main() -> std::io::Result<()> {
     for line in stdin.lock().lines() {
         let msg = line?.trim().to_string();
 
-        if msg == "/clear" || msg == "/c" {
-            print!("\x1B[2J\x1B[H");
-            io::stdout().flush()?;
+        if msg.is_empty() {
             continue;
         }
 
-        if msg == "/ping" {
-            let now_ms = match SystemTime::now().duration_since(UNIX_EPOCH) {
-                Ok(dur) => dur.as_millis(),
-                Err(_) => 0,
-            };
-            let ping_setup = format!("/ping {}", now_ms);
-            stream.write_all(ping_setup.as_bytes())?;
+        if msg.starts_with('/') {
+            // Local commands
+            if msg == "/clear" || msg == "/c" {
+                print!("\x1B[2J\x1B[H");
+                io::stdout().flush()?;
+                continue;
+            }
+
+            if msg == "/ping" {
+                let now_ms = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis();
+                let ping_setup = format!("/ping {}", now_ms);
+                stream.write_all(ping_setup.as_bytes())?;
+                stream.write_all(b"\n")?;
+                continue;
+            }
+
+            // Send other commands directly to server
+            stream.write_all(msg.as_bytes())?;
             stream.write_all(b"\n")?;
+            continue;
         }
 
-        stream.write_all(msg.as_bytes())?;
+        // Ask server for current room members
+        stream.write_all("/members?".as_bytes())?;
         stream.write_all(b"\n")?;
+
+        // Block until receive thread fills the map
+        let members = get_room_members_blocking();
+
+        for (recipient, pubkey) in members {
+            // if recipient == username { continue; }
+            match encrypt(&msg, &pubkey) {
+                Ok(cipher_b64) => {
+                    let wire = format!("{} {}", recipient, cipher_b64);
+                    stream.write_all(wire.as_bytes())?;
+                    stream.write_all(b"\n")?;
+                }
+                Err(e) => eprintln!("Encryption failed for {recipient}: {e}"),
+            }
+        }
+
+        // Clear after sending
+        let (lock, _) = &*MEMBERS;
+        lock.lock().unwrap().clear();
     }
 
     Ok(())

@@ -25,34 +25,19 @@
         "user"
       ],
       "colors": {
-        "admin": "#FF3030",
+        "user": "#FFCCCC",
         "owner": "#FFBB00",
-        "mod": "#0080FF",
-        "user": "#FFCCCC"
+        "admin": "#FF3030",
+        "mod": "#0080FF"
       }
     },
     "users": {
-      "bob": {
-        "nick": "",
-        "color": "",
+      "balls": {
+        "nick": "nutsack",
+        "color": "#00FFFF",
         "role": "user",
         "hidden": false,
-        "last_seen": 1753999540,
-        "banned": false,
-        "ban_stamp": 0,
-        "ban_length": 0,
-        "ban_reason": "",
-        "muted": false,
-        "mute_stamp": 0,
-        "mute_length": 0,
-        "mute_reason": ""
-      },
-      "bryan": {
-        "nick": "poopnick",
-        "color": "#FF5C77",
-        "role": "owner",
-        "hidden": false,
-        "last_seen": 1753979644,
+        "last_seen": 0,
         "banned": false,
         "ban_stamp": 0,
         "ban_length": 0,
@@ -77,12 +62,27 @@
         "mute_length": 0,
         "mute_reason": ""
       },
-      "balls": {
+      "bob": {
         "nick": "",
         "color": "",
         "role": "user",
         "hidden": false,
-        "last_seen": 0,
+        "last_seen": 1753999540,
+        "banned": false,
+        "ban_stamp": 0,
+        "ban_length": 0,
+        "ban_reason": "",
+        "muted": false,
+        "mute_stamp": 0,
+        "mute_length": 0,
+        "mute_reason": ""
+      },
+      "bryan": {
+        "nick": "",
+        "color": "#FF5C77",
+        "role": "owner",
+        "hidden": false,
+        "last_seen": 1754021735,
         "banned": false,
         "ban_stamp": 0,
         "ban_length": 0,

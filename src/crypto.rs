@@ -13,7 +13,7 @@ use pkcs8::{DecodePublicKey, EncodePrivateKey};
 use sha2::Sha256;
 
 // Client holds its own private key in memory
-static MY_PRIVKEY: OnceCell<RsaPrivateKey> = OnceCell::new();
+pub static MY_PRIVKEY: OnceCell<RsaPrivateKey> = OnceCell::new();
 
 #[derive(serde::Deserialize, serde::Serialize)]
 struct PairJSON {
@@ -34,14 +34,21 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
 
     // Load existing key map; tolerate empty/corrupt JSON
     let mut map: HashMap<String, PairJSON> = {
-        let raw = fs::read_to_string("data/keys.json").unwrap_or_default();
+        let raw = match fs::read_to_string("data/keys.json") {
+            Ok(content) => content,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),
+            Err(e) => return Err(e.into())
+        };
         if raw.trim().is_empty() {
             HashMap::new()
         } else {
-            serde_json::from_str(&raw).unwrap_or_else(|e| {
-                eprintln!("keys.json corrupt ({e}), starting fresh");
-                HashMap::new()
-            })
+            match serde_json::from_str(&raw) {
+                Ok(m) => m,
+                Err(e) => {
+                    eprintln!("keys.json corrupt ({e}), starting fresh");
+                    HashMap::new()
+                }
+            }
         }
     };
 
@@ -95,6 +102,8 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
 pub fn encrypt(msg: &str, recipient_pubkey: &str) -> Result<String, Box<dyn std::error::Error>> {
     // Decode recipient’s pubkey
     let der = general_purpose::STANDARD.decode(recipient_pubkey)?;
+    
+    // Parse the public key
     let pub_key = RsaPublicKey::from_public_key_der(&der)?;
 
     // Encrypt with RSA-OAEP-SHA256
@@ -104,10 +113,9 @@ pub fn encrypt(msg: &str, recipient_pubkey: &str) -> Result<String, Box<dyn std:
     Ok(general_purpose::STANDARD.encode(ciphertext))
 }
 
-pub fn decrypt(msg: &str, recipient_privkey: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub fn decrypt(msg: &str) -> Result<String, Box<dyn std::error::Error>> {
     // Decode recipient's privkey
-    let der = general_purpose::STANDARD.decode(recipient_privkey)?;
-    let priv_key = RsaPrivateKey::from_pkcs8_der(&der)?;
+    let priv_key = MY_PRIVKEY.get().expect("Private key not initialized");
 
     // Decode ciphertext from Base64 to bytes
     let cipherbytes = general_purpose::STANDARD.decode(msg)?;
