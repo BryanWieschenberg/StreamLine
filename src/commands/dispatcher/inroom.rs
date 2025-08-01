@@ -127,6 +127,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 username: username.clone()
             };
 
+            writeln!(client.stream, "{}", format!("/LOBBY_STATE {}", username))?;
             writeln!(client.stream, "{}", format!("You have left {}", room).green())?;
             Ok(CommandResult::Handled)
         }

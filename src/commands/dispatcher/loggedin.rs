@@ -265,6 +265,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
 
             let old_username = username.clone(); // store original
             client.state = ClientState::LoggedIn { username: new_username.clone() };
+
+            writeln!(client.stream, "{}", format!("/GUEST_STATE"))?;
             writeln!(client.stream, "{}", format!("Username changed from {} to: {}", old_username, new_username).green())?;
             Ok(CommandResult::Handled)
         }
@@ -792,6 +794,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 is_afk: false
             };
 
+            writeln!(client.stream, "{}", format!("/ROOM_OK {} {}", username, name))?;
             writeln!(client.stream, "{}", format!("Joined room: {}", name).green())?;
             Ok(CommandResult::Handled)
         }

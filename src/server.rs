@@ -159,6 +159,10 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
                 if msg.is_empty() { continue };
 
+                // Optional: Have server print what it sees from E2EE perspective
+                // println!("{}", msg);
+
+                // Update last seen time for the client and reset AFK status
                 {
                     let mut s = lock_client(&client_arc)?;
                     if let ClientState::InRoom { inactive_time, is_afk, .. } = &mut s.state {
@@ -174,7 +178,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                             match &client.state {
                                 ClientState::InRoom { username, room, .. } => (username.clone(), room.clone()),
                                 _ => {
-                                    writeln!(lock_client(&client_arc)?.stream, "{}", "You are not in a room.".yellow())?;
+                                    writeln!(lock_client(&client_arc)?.stream, "{}", "You are not in a room".yellow())?;
                                     continue;
                                 }
                             }
@@ -196,7 +200,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                             }
                         }
 
-                        // Send `/members user1:pubkey user2:pubkey ...` line
+                        // Send '/members user1:pubkey user2:pubkey ...' line
                         let line = format!("/members {}", pairs.join(" "));
                         writeln!(lock_client(&client_arc)?.stream, "{line}")?;
                         continue;
@@ -217,44 +221,45 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
                 let mut sender = lock_client(&client_arc)?;
                 
-                if let ClientState::InRoom { username, room, .. } = &sender.state {
-                    let username = username.clone();
-                    let room_name = room.clone();
-                    drop(sender);
+                match &sender.state {
+                    ClientState::InRoom { username, room, .. } => {
+                        let username = username.clone();
+                        let room_name = room.clone();
+                        drop(sender);
 
-                    if let Some(msg) = check_mute(&rooms, &room_name, &username)? {
-                        let mut client = lock_client(&client_arc)?;
-                        writeln!(client.stream, "{}", msg.red())?;
-                        continue;
+                        if let Some(msg) = check_mute(&rooms, &room_name, &username)? {
+                            let mut client = lock_client(&client_arc)?;
+                            writeln!(client.stream, "{}", msg.red())?;
+                            continue;
+                        }
+
+                        let (role_prefix, display_name) = format_broadcast(&rooms, &room_name, &username)?;
+                        let mut parts = msg.splitn(2, ' ');
+                        let recipient   = parts.next().unwrap_or("");
+                        let ciphertext  = parts.next().unwrap_or("");
+
+                        if recipient.is_empty() || ciphertext.is_empty() {
+                            continue;
+                        }
+
+                        let clients_map = lock_clients(&clients)?;
+                        if let Some(rec_arc) = clients_map.values().find(|arc| {
+                            let c = arc.lock().unwrap();
+                            matches!(&c.state,
+                                ClientState::InRoom { username: u, room: r, .. }
+                                if u == recipient && r == &room_name)
+                        }).cloned()
+                        {
+                            let mut rec = lock_client(&rec_arc)?;
+                            writeln!(rec.stream, "/enc {} {}: {}", role_prefix, display_name, ciphertext)?;
+                        }
                     }
-
-                    let (role_prefix, display_name) = format_broadcast(&rooms, &room_name, &username)?;
-                    let mut parts = msg.splitn(2, ' ');
-                    let recipient   = parts.next().unwrap_or("");
-                    let ciphertext  = parts.next().unwrap_or("");
-
-                    if recipient.is_empty() || ciphertext.is_empty() {
-                        continue;
+                    ClientState::LoggedIn { .. } => {
+                        writeln!(sender.stream, "{}", "You must join a room to chat".yellow())?;
                     }
-
-                    let clients_map = lock_clients(&clients)?;
-                    if let Some(rec_arc) = clients_map.values().find(|arc| {
-                        let c = arc.lock().unwrap();
-                        matches!(&c.state,
-                            ClientState::InRoom { username: u, room: r, .. }
-                            if u == recipient && r == &room_name)
-                    }).cloned()
-                    {
-                        let mut rec = lock_client(&rec_arc)?;
-                        println!("{} {}: {}", role_prefix, display_name, ciphertext);
-                        writeln!(rec.stream, "{} {}: {}", role_prefix, display_name, ciphertext)?;
+                    ClientState::Guest => {
+                        writeln!(sender.stream, "{}", "You must log in to chat".yellow())?;
                     }
-                }
-                else if let ClientState::LoggedIn { .. } = &sender.state {
-                    writeln!(sender.stream, "{}", "You must join a room to chat".yellow())?;
-                }
-                else {
-                    writeln!(sender.stream, "{}", "You must log in to chat".yellow())?;
                 }
             }
             Err(e) => {

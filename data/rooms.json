@@ -25,9 +25,9 @@
         "user"
       ],
       "colors": {
-        "user": "#FFCCCC",
         "owner": "#FFBB00",
         "admin": "#FF3030",
+        "user": "#FFCCCC",
         "mod": "#0080FF"
       }
     },
@@ -62,12 +62,12 @@
         "mute_length": 0,
         "mute_reason": ""
       },
-      "bob": {
+      "bryan": {
         "nick": "",
-        "color": "",
-        "role": "user",
+        "color": "#FF5C77",
+        "role": "owner",
         "hidden": false,
-        "last_seen": 1753999540,
+        "last_seen": 1754057024,
         "banned": false,
         "ban_stamp": 0,
         "ban_length": 0,
@@ -77,12 +77,12 @@
         "mute_length": 0,
         "mute_reason": ""
       },
-      "bryan": {
+      "bob": {
         "nick": "",
-        "color": "#FF5C77",
-        "role": "owner",
+        "color": "",
+        "role": "user",
         "hidden": false,
-        "last_seen": 1754021735,
+        "last_seen": 1753999540,
         "banned": false,
         "ban_stamp": 0,
         "ban_length": 0,
