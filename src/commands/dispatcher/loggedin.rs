@@ -10,11 +10,11 @@ use colored::*;
 
 use crate::commands::parser::Command;
 use crate::commands::command_utils::{help_msg_loggedin, generate_hash};
-use crate::types::{Client, Clients, ClientState, Room, Rooms, RoomUser};
+use crate::types::{Client, ClientState, Clients, PublicKeys, Room, RoomUser, Rooms};
 use crate::utils::{lock_client, lock_clients, lock_users_storage, lock_rooms, lock_room, lock_rooms_storage};
 use super::CommandResult;
 
-pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String) -> io::Result<CommandResult> {
+pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, pubkeys: &PublicKeys) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
             let mut client = lock_client(&client)?;
@@ -30,7 +30,36 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             Ok(CommandResult::Handled)
         }
 
+        Command::PubKey { pubkey } => {
+            let mut map = match pubkeys.lock() {
+                Ok(m) => m,
+                Err(_) => {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: failed to lock pubkeys".red())?;
+                    return Ok(CommandResult::Handled);
+                }
+            };
+
+            if map.contains_key(username) {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", "Error: Public key already registered for this user".yellow())?;
+                return Ok(CommandResult::Handled);
+            }
+
+            map.insert(username.clone(), pubkey.clone());
+            Ok(CommandResult::Handled)
+        }
+
         Command::Quit => {
+            {
+                let mut pubkeys_map = match pubkeys.lock() {
+                    Ok(g) => g,
+                    Err(_) => return Ok(CommandResult::Handled),
+                };
+
+                pubkeys_map.remove(username);
+            }
+
             let addr = {
                 let c = lock_client(&client)?;
                 c.addr
@@ -185,6 +214,15 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
         }
 
         Command::AccountLogout => {
+            {
+                let mut pubkeys_map = match pubkeys.lock() {
+                    Ok(g) => g,
+                    Err(_) => return Ok(CommandResult::Handled),
+                };
+
+                pubkeys_map.remove(username);
+            }
+            
             let mut client = lock_client(&client)?;
             client.state = ClientState::Guest;
             writeln!(client.stream, "{}", format!("Logged out: {}", username).green())?;

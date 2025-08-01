@@ -10,7 +10,7 @@ use crate::commands::parser::{Command, parse_command};
 use crate::commands::dispatcher::{dispatch_command, CommandResult};
 use crate::commands::command_utils::{unix_timestamp};
 mod types;
-use crate::types::{Clients, Client, ClientState, Rooms, Room};
+use crate::types::{Client, ClientState, Clients, PublicKeys, Room, Rooms};
 mod utils;
 use crate::utils::{broadcast_message, check_mute, format_broadcast, lock_client, lock_clients, lock_room, lock_rooms};
 
@@ -132,7 +132,7 @@ pub fn check_rate_limit(client_arc: &Arc<Mutex<Client>>, rooms: &Rooms) -> std::
 }
 
 // Handler for each client connection on a separate thread
-fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: Rooms) -> std::io::Result<()> {
+fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: Rooms, pubkeys: PublicKeys) -> std::io::Result<()> {
     let reader = BufReader::new(stream.try_clone()?);
 
     let client_arc = Arc::new(Mutex::new(Client {
@@ -140,6 +140,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
         addr: peer,
         state: ClientState::Guest,
         ignore_list: Vec::new(),
+        pubkey: String::new()
     }));
 
     // Insert the new client into the clients map
@@ -169,7 +170,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                 if msg.starts_with("/") {
                     let command: Command = parse_command(&msg);
                     
-                    match dispatch_command(command, Arc::clone(&client_arc), &clients, &rooms)? {
+                    match dispatch_command(command, Arc::clone(&client_arc), &clients, &rooms, &pubkeys)? {
                         CommandResult::Handled => continue,
                         CommandResult::Stop => break
                     }
@@ -255,7 +256,7 @@ fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))?;
 
     let clients: Clients = Arc::new(Mutex::new(HashMap::new()));
-
+    let pubkeys: PublicKeys = Arc::new(Mutex::new(HashMap::new()));
     let room_file = std::fs::File::open("data/rooms.json")?;
     let room_reader = BufReader::new(room_file);
     let parsed_rooms: HashMap<String, Room> = serde_json::from_reader(room_reader)?;
@@ -293,11 +294,12 @@ fn main() -> std::io::Result<()> {
                 // Clone clients Arc and use the clone in the thread
                 let clients = Arc::clone(&clients);
                 let rooms = Arc::clone(&rooms);
-                
+                let pubkeys = Arc::clone(&pubkeys);
+
                 thread::Builder::new()
                     .name(format!("client-{peer}"))
                     .spawn(move || {
-                        if let Err(e) = handle_client(stream, peer, clients, rooms) {
+                        if let Err(e) = handle_client(stream, peer, clients, rooms, pubkeys) {
                             eprintln!("Thread for {peer} exited with error: {e}");
                         }
                     })?;

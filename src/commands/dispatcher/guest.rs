@@ -8,7 +8,7 @@ use colored::*;
 
 use crate::commands::parser::Command;
 use crate::commands::command_utils::{help_msg_guest, generate_hash, is_user_logged_in};
-use crate::types::{Client, Clients, ClientState, Rooms};
+use crate::types::{Client, ClientState, Clients, Rooms};
 use crate::utils::{lock_client, lock_clients, lock_users_storage};
 use super::CommandResult;
 
@@ -20,11 +20,17 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             Ok(CommandResult::Handled)
         }
 
-        Command::Ping { start_time }=> {
+        Command::Ping { start_time } => {
             let mut client = lock_client(&client)?;
             if let Some(start_ms) = start_time {
                 writeln!(client.stream, "/PONG {}", start_ms)?;
             }
+            Ok(CommandResult::Handled)
+        }
+
+        Command::PubKey { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Public keys are handled automatically when logging in".yellow())?;
             Ok(CommandResult::Handled)
         }
 

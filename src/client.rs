@@ -4,9 +4,9 @@ use std::{env, thread};
 use colored::Colorize;
 use std::time::{SystemTime, UNIX_EPOCH};
 mod crypto;
-use crate::crypto::{sayhi};
+use crate::crypto::{generate_or_load_keys};
 
-fn handle_control_packets(msg: &str) -> std::io::Result<()> {
+fn handle_control_packets(stream: &mut TcpStream, msg: &str) -> std::io::Result<()> {
     // Ping FRT latency calculation
     if let Some(frt_latency) = msg.strip_prefix("/PONG ") {
         if let Ok(sent_ms) = frt_latency.trim().parse::<u128>() {
@@ -23,24 +23,33 @@ fn handle_control_packets(msg: &str) -> std::io::Result<()> {
         return Ok(());
     }
     
+    // Login confirmation
     else if let Some(username) = msg.strip_prefix("/LOGIN_OK ") {
-        sayhi(username);
+        if let Ok(pub_b64) = generate_or_load_keys(username) {
+
+            // Send pubkey to server
+            let register = format!("/pubkey {pub_b64}");
+            stream.write_all(register.as_bytes())?;
+            stream.write_all(b"\n")?;
+        }
         return Ok(());
     }
-    
     Ok(())
 }
 
 // Function to handle receiving messages from the server
 fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
+    let stream_for_writing = stream.try_clone()?;
+    
     let reader = BufReader::new(stream);
     for line in reader.lines() {
         match line {
             Ok(msg) => {
                 if msg.starts_with("/") {
-                    if let Err(e) = handle_control_packets(&msg) {
+                    if let Err(e) = handle_control_packets(&mut stream_for_writing.try_clone()?, &msg) {
                         eprintln!("Error handling control packet: {e}");
                     }
+                    continue;
                 }
 
                 println!("{msg}")

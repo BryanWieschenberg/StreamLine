@@ -23,7 +23,8 @@ pub struct Client {
     pub stream: TcpStream,
     pub addr: SocketAddr,
     pub state: ClientState,
-    pub ignore_list: Vec<String>
+    pub ignore_list: Vec<String>,
+    pub pubkey: String
 }
 
 pub type Clients = Arc<Mutex<HashMap<SocketAddr, Arc<Mutex<Client>>>>>;
@@ -69,6 +70,8 @@ pub type Rooms = Arc<Mutex<HashMap<String, Arc<Mutex<Room>>>>>;
 // User file access lock
 pub static USERS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 pub static ROOMS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+pub type PublicKeys = Arc<Mutex<HashMap<String, String>>>;
 
 // --- For future TUI implementation ---
 #[allow(dead_code)]

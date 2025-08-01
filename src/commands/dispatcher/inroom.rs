@@ -11,11 +11,11 @@ use colored::*;
 
 use crate::commands::parser::Command;
 use crate::commands::command_utils::{help_msg_inroom, ColorizeExt, has_permission, save_rooms_to_disk, command_order, RESTRICTED_COMMANDS, unix_timestamp, parse_duration};
-use crate::types::{Client, Clients, ClientState, Rooms, RoomUser};
+use crate::types::{Client, ClientState, Clients, PublicKeys, RoomUser, Rooms};
 use crate::utils::{broadcast_message, check_mute, lock_client, lock_clients, lock_room, lock_rooms, lock_rooms_storage, lock_users_storage};
 use super::CommandResult;
 
-pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, room: &String) -> io::Result<CommandResult> {
+pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, room: &String, pubkeys: &PublicKeys) -> io::Result<CommandResult> {
     if !has_permission(&cmd, client.clone(), rooms, username, room)? {
         return Ok(CommandResult::Handled);
     }
@@ -61,7 +61,22 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
+        Command::PubKey { .. } => {
+            let mut client = lock_client(&client)?;
+            writeln!(client.stream, "{}", "Public keys are handled automatically when logging in".yellow())?;
+            Ok(CommandResult::Handled)
+        }
+
         Command::Quit => {
+            {
+                let mut pubkeys_map = match pubkeys.lock() {
+                    Ok(g) => g,
+                    Err(_) => return Ok(CommandResult::Handled),
+                };
+
+                pubkeys_map.remove(username);
+            }
+
             let addr = {
                 let c = lock_client(&client)?;
                 c.addr
