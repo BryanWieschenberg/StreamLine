@@ -24,10 +24,22 @@ static MY_STATE: Lazy<Mutex<ClientState>> = Lazy::new(|| (Mutex::new(ClientState
 
 fn get_room_members() -> HashMap<String, String> {
     let (lock, cvar) = &*MEMBERS;
-    let mut members = lock.lock().unwrap();
+    let mut members = match lock.lock() {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Failed to lock MEMBERS: {e}");
+            return HashMap::new();
+        }
+    };
 
     // Wait until members is not empty
-    members = cvar.wait(members).unwrap();
+    members = match cvar.wait(members) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Failed to wait on MEMBERS: {e}");
+            return HashMap::new();
+        }
+    };
 
     members.clone() // Return a copy
 }
@@ -52,7 +64,13 @@ fn handle_control_packets(stream: &mut TcpStream, msg: &str) -> std::io::Result<
     // Login confirmation
     else if let Some(username) = msg.strip_prefix("/LOGIN_OK ") {
         {
-            let mut state = MY_STATE.lock().unwrap();
+            let mut state = match MY_STATE.lock() {
+                Ok(state) => state,
+                Err(e) => {
+                    eprintln!("Failed to lock MY_STATE: {e}");
+                    return Err(io::Error::new(io::ErrorKind::Other, "Failed to lock MY_STATE"));
+                }
+            };
             *state = ClientState::LoggedIn;
         }
         
@@ -116,7 +134,13 @@ fn handle_control_packets(stream: &mut TcpStream, msg: &str) -> std::io::Result<
         }
 
         let (lock, cvar) = &*MEMBERS;
-        let mut members = lock.lock().unwrap();
+        let mut members = match lock.lock() {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("Failed to lock MEMBERS: {e}");
+                return Err(io::Error::new(io::ErrorKind::Other, "Failed to lock MEMBERS"));
+            }
+        };
         *members = map;
         cvar.notify_all(); // Let main send thread continue
         return Ok(());
@@ -240,10 +264,13 @@ fn main() -> std::io::Result<()> {
             }
 
             if msg == "/ping" {
-                let now_ms = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis();
+                let now_ms = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                    Ok(duration) => duration.as_millis(),
+                    Err(e) => {
+                        eprintln!("SystemTime error: {e}");
+                        continue;
+                    }
+                };
                 let ping_setup = format!("/ping {}", now_ms);
                 stream.write_all(ping_setup.as_bytes())?;
                 stream.write_all(b"\n")?;

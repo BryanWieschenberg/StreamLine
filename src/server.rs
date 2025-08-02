@@ -178,14 +178,22 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                             match &client.state {
                                 ClientState::InRoom { username, room, .. } => (username.clone(), room.clone()),
                                 _ => {
-                                    writeln!(lock_client(&client_arc)?.stream, "{}", "You are not in a room".yellow())?;
+                                    let mut client = lock_client(&client_arc)?;
+                                    writeln!(client.stream, "{}", "You are not in a room".yellow())?;
                                     continue;
                                 }
                             }
                         };
 
                         let clients_map = lock_clients(&clients)?;
-                        let pubkeys_map = pubkeys.lock().unwrap();
+                        let pubkeys_map = match pubkeys.lock() {
+                            Ok(map) => map,
+                            Err(_) => {
+                                let mut client = lock_client(&client_arc)?;
+                                writeln!(client.stream, "{}", "Failed to lock pubkeys".red())?;
+                                continue;
+                            }
+                        };
 
                         let mut pairs = Vec::new();
 
@@ -194,7 +202,13 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                         match tokens.as_slice() {
                             ["ind", target] => {
                                 for (_, arc) in clients_map.iter() {
-                                    let client = arc.lock().unwrap();
+                                    let client = match arc.lock() {
+                                        Ok(c) => c,
+                                        Err(e) => {
+                                            eprintln!("Failed to lock client: {e}");
+                                            continue;
+                                        }
+                                    };
                                     let (u, r) = match &client.state {
                                         ClientState::InRoom { username: u, room: r, .. } => (u, r),
                                         _ => continue,
@@ -209,15 +223,28 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                                         continue;
                                     }
 
-                                    let key_b64 = pubkeys_map.get(u).cloned().unwrap_or_default();
-                                    writeln!(lock_client(&client_arc)?.stream, "/members {u}:{key_b64}")?;
+                                    let key_b64 = match pubkeys_map.get(u) {
+                                        Some(k) => k.clone(),
+                                        None => {
+                                            eprintln!("Public key for user '{}' not found", u);
+                                            continue;
+                                        }
+                                    };
+                                    let mut client = lock_client(&client_arc)?;
+                                    writeln!(client.stream, "/members {u}:{key_b64}")?;
                                     break;
                                 }
                             }
 
                             ["normal"] => {
                                 for (_, arc) in clients_map.iter() {
-                                    let client = arc.lock().unwrap();
+                                    let client = match arc.lock() {
+                                        Ok(c) => c,
+                                        Err(e) => {
+                                            eprintln!("Failed to lock client: {e}");
+                                            continue;
+                                        }
+                                    };
                                     let (u, r) = match &client.state {
                                         ClientState::InRoom { username: u, room: r, .. } => (u, r),
                                         _ => continue,
@@ -231,17 +258,27 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                                         continue;
                                     }
 
-                                    let key_b64 = pubkeys_map.get(u).cloned().unwrap_or_default();
+                                    let Some(key_b64) = pubkeys_map.get(u).cloned() else {
+                                        eprintln!("No public key found for user '{}'", u);
+                                        continue;
+                                    };
                                     pairs.push(format!("{u}:{key_b64}"));
                                 }
 
                                 let line = format!("/members {}", pairs.join(" "));
-                                writeln!(lock_client(&client_arc)?.stream, "{line}")?;
+                                let mut client = lock_client(&client_arc)?;
+                                writeln!(client.stream, "{line}")?;
                             }
 
                             ["full"] => {
                                 for (_, arc) in clients_map.iter() {
-                                    let client = arc.lock().unwrap();
+                                    let client = match arc.lock() {
+                                        Ok(c) => c,
+                                        Err(e) => {
+                                            eprintln!("Failed to lock client: {e}");
+                                            continue;
+                                        }
+                                    };
                                     let (u, r) = match &client.state {
                                         ClientState::InRoom { username: u, room: r, .. } => (u, r),
                                         _ => continue,
@@ -255,16 +292,21 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                                         continue;
                                     }
 
-                                    let key_b64 = pubkeys_map.get(u).cloned().unwrap_or_default();
+                                    let Some(key_b64) = pubkeys_map.get(u).cloned() else {
+                                        eprintln!("No public key found for user '{}'", u);
+                                        continue;
+                                    };
                                     pairs.push(format!("{u}:{key_b64}"));
                                 }
 
                                 let line = format!("/members {}", pairs.join(" "));
-                                writeln!(lock_client(&client_arc)?.stream, "{line}")?;
+                                let mut client = lock_client(&client_arc)?;
+                                writeln!(client.stream, "{line}")?;
                             }
 
                             _ => {
-                                writeln!(lock_client(&client_arc)?.stream, "{}", "Invalid /members? usage".red())?;
+                                let mut client = lock_client(&client_arc)?;
+                                writeln!(client.stream, "{}", "Invalid /members? usage".red())?;
                             }
                         }
 
@@ -300,8 +342,15 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
                         let (role_prefix, display_name) = format_broadcast(&rooms, &room_name, &username)?;
                         let mut parts = msg.splitn(2, ' ');
-                        let recipient   = parts.next().unwrap_or("");
-                        let ciphertext  = parts.next().unwrap_or("");
+                        let Some(recipient) = parts.next() else {
+                            eprintln!("Missing recipient in encrypted message");
+                            continue;
+                        };
+
+                        let Some(ciphertext) = parts.next() else {
+                            eprintln!("Missing ciphertext in encrypted message");
+                            continue;
+                        };
 
                         if recipient.is_empty() || ciphertext.is_empty() {
                             continue;
@@ -309,7 +358,13 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
                         let clients_map = lock_clients(&clients)?;
                         if let Some(rec_arc) = clients_map.values().find(|arc| {
-                            let c = arc.lock().unwrap();
+                            let c = match arc.lock() {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    eprintln!("Failed to lock client: {e}");
+                                    return false;
+                                }
+                            };
                             matches!(&c.state,
                                 ClientState::InRoom { username: u, room: r, .. }
                                 if u == recipient && r == &room_name)
