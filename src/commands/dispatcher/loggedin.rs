@@ -794,7 +794,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 is_afk: false
             };
 
-            writeln!(client.stream, "{}", format!("/ROOM_OK {} {}", username, name))?;
+            writeln!(client.stream, "{}", format!("/ROOM_STATE"))?;
             writeln!(client.stream, "{}", format!("Joined room: {}", name).green())?;
             Ok(CommandResult::Handled)
         }

@@ -35,6 +35,7 @@ pub fn broadcast_message(clients: &Clients, room_name: &str, sender: &str, msg: 
     Ok(())
 }
 
+// Check if the user is muted in a specific room
 pub fn check_mute(rooms: &Rooms, room: &str, username: &str) -> io::Result<Option<String>> {
     let room_arc = {
         let rooms_map = lock_rooms(rooms)?;

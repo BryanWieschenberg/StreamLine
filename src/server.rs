@@ -172,8 +172,8 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                 }
 
                 if msg.starts_with("/") {
-                    if msg == "/members?" {
-                        let (_username, room_name) = {
+                    if let Some(rest) = msg.strip_prefix("/members? ") {
+                        let (username, room_name) = {
                             let client = lock_client(&client_arc)?;
                             match &client.state {
                                 ClientState::InRoom { username, room, .. } => (username.clone(), room.clone()),
@@ -184,25 +184,90 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                             }
                         };
 
-                        // Build list of user:pubkey for everyone in the same room
                         let clients_map = lock_clients(&clients)?;
-                        let pubkeys_map = pubkeys.lock().unwrap(); // PublicKeys = Arc<Mutex<HashMap<String,String>>>
-                        
+                        let pubkeys_map = pubkeys.lock().unwrap();
+
                         let mut pairs = Vec::new();
-                        for client_arc in clients_map.values() {
-                            let client = client_arc.lock().unwrap();
-                            if let ClientState::InRoom { username: u, room: r, .. } = &client.state {
-                                if *r == room_name {
-                                    // Lookup pubkey
+
+                        let tokens: Vec<&str> = rest.trim().split_whitespace().collect();
+
+                        match tokens.as_slice() {
+                            ["ind", target] => {
+                                for (_, arc) in clients_map.iter() {
+                                    let client = arc.lock().unwrap();
+                                    let (u, r) = match &client.state {
+                                        ClientState::InRoom { username: u, room: r, .. } => (u, r),
+                                        _ => continue,
+                                    };
+
+                                    if u != target || r != &room_name {
+                                        continue;
+                                    }
+
+                                    // Skip if recipient has sender ignored
+                                    if client.ignore_list.contains(&username) {
+                                        continue;
+                                    }
+
+                                    let key_b64 = pubkeys_map.get(u).cloned().unwrap_or_default();
+                                    writeln!(lock_client(&client_arc)?.stream, "/members {u}:{key_b64}")?;
+                                    break;
+                                }
+                            }
+
+                            ["normal"] => {
+                                for (_, arc) in clients_map.iter() {
+                                    let client = arc.lock().unwrap();
+                                    let (u, r) = match &client.state {
+                                        ClientState::InRoom { username: u, room: r, .. } => (u, r),
+                                        _ => continue,
+                                    };
+
+                                    if r != &room_name || u == &username {
+                                        continue;
+                                    }
+
+                                    if client.ignore_list.contains(&username) {
+                                        continue;
+                                    }
+
                                     let key_b64 = pubkeys_map.get(u).cloned().unwrap_or_default();
                                     pairs.push(format!("{u}:{key_b64}"));
                                 }
+
+                                let line = format!("/members {}", pairs.join(" "));
+                                writeln!(lock_client(&client_arc)?.stream, "{line}")?;
+                            }
+
+                            ["full"] => {
+                                for (_, arc) in clients_map.iter() {
+                                    let client = arc.lock().unwrap();
+                                    let (u, r) = match &client.state {
+                                        ClientState::InRoom { username: u, room: r, .. } => (u, r),
+                                        _ => continue,
+                                    };
+
+                                    if r != &room_name {
+                                        continue;
+                                    }
+
+                                    if client.ignore_list.contains(&username) {
+                                        continue;
+                                    }
+
+                                    let key_b64 = pubkeys_map.get(u).cloned().unwrap_or_default();
+                                    pairs.push(format!("{u}:{key_b64}"));
+                                }
+
+                                let line = format!("/members {}", pairs.join(" "));
+                                writeln!(lock_client(&client_arc)?.stream, "{line}")?;
+                            }
+
+                            _ => {
+                                writeln!(lock_client(&client_arc)?.stream, "{}", "Invalid /members? usage".red())?;
                             }
                         }
 
-                        // Send '/members user1:pubkey user2:pubkey ...' line
-                        let line = format!("/members {}", pairs.join(" "));
-                        writeln!(lock_client(&client_arc)?.stream, "{line}")?;
                         continue;
                     }
 

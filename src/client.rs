@@ -7,15 +7,12 @@ use colored::Colorize;
 use once_cell::sync::Lazy;
 use std::time::{SystemTime, UNIX_EPOCH};
 mod crypto;
-use crate::crypto::{generate_or_load_keys, encrypt, decrypt};
+use crate::crypto::{generate_or_load_keys, decrypt, broadcast_message};
 
 enum ClientState {
     Guest,
-    LoggedIn {username: String},
-    InRoom {
-        username: String,
-        room: String,
-    }
+    LoggedIn,
+    InRoom
 }
 
 // Clientside room members list for sending encrypted messages to the server
@@ -30,9 +27,7 @@ fn get_room_members() -> HashMap<String, String> {
     let mut members = lock.lock().unwrap();
 
     // Wait until members is not empty
-    while members.is_empty() {
-        members = cvar.wait(members).unwrap();
-    }
+    members = cvar.wait(members).unwrap();
 
     members.clone() // Return a copy
 }
@@ -58,7 +53,7 @@ fn handle_control_packets(stream: &mut TcpStream, msg: &str) -> std::io::Result<
     else if let Some(username) = msg.strip_prefix("/LOGIN_OK ") {
         {
             let mut state = MY_STATE.lock().unwrap();
-            *state = ClientState::LoggedIn { username: username.to_string() };
+            *state = ClientState::LoggedIn;
         }
         
         if let Ok(pub_b64) = generate_or_load_keys(username) {
@@ -70,34 +65,43 @@ fn handle_control_packets(stream: &mut TcpStream, msg: &str) -> std::io::Result<
         return Ok(());
     }
 
-    else if let Some(payload) = msg.strip_prefix("/ROOM_OK ") {
-        let mut parts = payload.splitn(2, ' ');
-        match (parts.next(), parts.next()) {
-            (Some(username), Some(room)) => {
-                if let Ok(mut state) = MY_STATE.lock() {
-                    *state = ClientState::InRoom { username: username.to_string(), room: room.to_string() };
-                } else {
-                    eprintln!("Failed to lock MY_STATE for ROOM_OK");
+    else if msg == "/ROOM_STATE" {
+        {
+            let mut state = match MY_STATE.lock() {
+                Ok(state) => state,
+                Err(e) => {
+                    eprintln!("Failed to lock MY_STATE: {e}");
+                    return Err(io::Error::new(io::ErrorKind::Other, "Failed to lock MY_STATE"));
                 }
-            }
-            _ => {
-                eprintln!("Malformed /ROOM_OK line: {payload}");
-            }
+            };
+            *state = ClientState::InRoom;
         }
         return Ok(());
     }
 
-    else if let Some(username) = msg.strip_prefix("/LOBBY_STATE ") {
+    else if msg == "/LOBBY_STATE" {
         {
-            let mut state = MY_STATE.lock().unwrap();
-            *state = ClientState::LoggedIn { username: username.to_string() };
+            let mut state = match MY_STATE.lock() {
+                Ok(state) => state,
+                Err(e) => {
+                    eprintln!("Failed to lock MY_STATE: {e}");
+                    return Err(io::Error::new(io::ErrorKind::Other, "Failed to lock MY_STATE"));
+                }
+            };
+            *state = ClientState::LoggedIn;
         }
         return Ok(());
     }
 
     else if msg == "/GUEST_STATE" {
         {
-            let mut state = MY_STATE.lock().unwrap();
+            let mut state = match MY_STATE.lock() {
+                Ok(state) => state,
+                Err(e) => {
+                    eprintln!("Failed to lock MY_STATE: {e}");
+                    return Err(io::Error::new(io::ErrorKind::Other, "Failed to lock MY_STATE"));
+                }
+            };
             *state = ClientState::Guest {};
         }
         return Ok(());
@@ -118,6 +122,17 @@ fn handle_control_packets(stream: &mut TcpStream, msg: &str) -> std::io::Result<
         return Ok(());
     }
 
+    // For if only sender is in room
+    else if msg == "/members" {
+        println!("hi");
+        let (lock, cvar) = &*MEMBERS;
+        if let Ok(mut members) = lock.lock() {
+            members.clear(); // no members, just unblock
+            cvar.notify_all();
+        }
+        return Ok(());
+    }
+
     Ok(())
 }
 
@@ -129,13 +144,6 @@ fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
     for line in reader.lines() {
         match line {
             Ok(msg) => {
-                if msg.starts_with("/") {
-                    if let Err(e) = handle_control_packets(&mut stream_for_writing.try_clone()?, &msg) {
-                        eprintln!("Error handling control packet: {e}");
-                    }
-                    continue;
-                }
-
                 if msg.starts_with("/enc ") {
                     if let Some(enc_line) = msg.strip_prefix("/enc ") {
                         if let Some((prefix, cipher_b64)) = enc_line.split_once(": ") {
@@ -147,13 +155,20 @@ fn handle_recv(stream: TcpStream) -> std::io::Result<()> {
                                 }
                             }
                         } else {
-                            eprintln!("Malformed /enc message — missing prefix or ciphertext");
+                            eprintln!("Malformed /enc message, missing prefix or ciphertext");
                         }
                     }
-                } else {
-                    // Not an encrypted message, print as-is
-                    println!("{msg}");
+                    continue;
                 }
+
+                if msg.starts_with("/") {
+                    if let Err(e) = handle_control_packets(&mut stream_for_writing.try_clone()?, &msg) {
+                        eprintln!("Error handling control packet: {e}");
+                    }
+                    continue;
+                }
+
+                println!("{msg}");
             }
             Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => break,
             Err(e) => {
@@ -240,31 +255,22 @@ fn main() -> std::io::Result<()> {
             continue;
         }
 
+        {
+            let (lock, _) = &*MEMBERS;
+            if let Ok(mut map) = lock.lock() {
+                map.clear();
+            }
+        }
+
         if let Ok(state) = MY_STATE.lock() {
-            //TODO: Turn this into the broadcast fn, be sure to check for mutes eventually
-            if let ClientState::InRoom { .. } = &*state {
+            if let ClientState::InRoom = &*state {
                 // Ask server for current room members
-                if let Err(e) = stream.write_all(b"/members?\n") {
-                    eprintln!("Failed to request /members?: {e}");
-                    return Ok(());
-                }
+                let mut stream_clone = stream.try_clone()?;
+                stream.write_all(b"/members? normal\n")?;
 
                 let members = get_room_members();
-
-                for (recipient, pubkey) in members {
-                    match encrypt(&msg, &pubkey) {
-                        Ok(cipher_b64) => {
-                            let wire = format!("{recipient} {cipher_b64}");
-                            stream.write_all(wire.as_bytes())?;
-                            stream.write_all(b"\n")?;
-                        }
-                        Err(e) => eprintln!("Encryption failed for {recipient}: {e}"),
-                    }
-                }
-
-                let (lock, _) = &*MEMBERS;
-                if let Ok(mut map) = lock.lock() {
-                    map.clear();
+                if !members.is_empty() {
+                    broadcast_message(&mut stream_clone, &members, &msg)?;
                 }
             } else {
                 // Not in a room, just send plaintext

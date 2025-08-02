@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs::{self};
-use std::io::{self};
+use std::io::{self, Write};
+use std::net::TcpStream;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -125,4 +126,19 @@ pub fn decrypt(msg: &str) -> Result<String, Box<dyn std::error::Error>> {
 
     // Convert from UTF-8 bytes and return String
     Ok(String::from_utf8(plaintext_bytes)?)
+}
+
+pub fn broadcast_message(stream: &mut TcpStream, members: &HashMap<String, String>, msg: &str) -> io::Result<()> {
+    for (recipient, pubkey) in members {
+        match encrypt(msg, pubkey) {
+            Ok(cipher_b64) => {
+                let wire = format!("{recipient} {cipher_b64}");
+                stream.write_all(wire.as_bytes())?;
+                stream.write_all(b"\n")?;
+            }
+            Err(e) => eprintln!("Encryption failed for {recipient}: {e}"),
+        }
+    }
+
+    Ok(())
 }
