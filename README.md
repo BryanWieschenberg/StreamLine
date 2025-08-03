@@ -7,7 +7,7 @@ A powerful, customizable, and performant chat platform built in Rust. Supports h
 ## Core Features
 
 - Real-time messaging over LAN with multiple concurrent clients across multiple rooms
-- Vast command system for user/room management, moderation, etc. Stored locally as `.json` files
+- Vast command system for user/room management, moderation, etc. Stored locally as JSON files
 - Rooms with custom role permissions on a per-command basis
 - End-to-end encryption and password hashing using SHA-256
 
@@ -83,7 +83,7 @@ Many commands have shorter, more concise variations for more experienced users. 
 - `join <room_name>` - Joins the specified room if the user has access to it
 - `create <room_name> [<whitelist>]` - Creates a new room and sets you as the owner. The [whitelist] option allows the room to be private upon creation
 - `import <file_name>` - Imports a room from JSON files in `data/vault/rooms` (Export variant is mentioned later since it requires you to be in the room and have superuser privileges)
-- `delete <room_name> [force]` - Deletes the specified room (Owner only). The [force] option allows users to skip the deletion prompt
+- `delete [force] <room_name>` - Deletes the specified room (Owner only). The [force] option allows users to skip the deletion prompt
 
 #### `/ignore` (Must be logged in, and works in and out of rooms)
 - `list` - Shows who you're currently ignoring (users you block messages from)
@@ -175,19 +175,15 @@ Default User Commands:
 
 ## Security
 
-Currently applied only to standard messages. Support for commands like /me, /msg, and /announce, can be added by having clients track which permissions they currently have available in their current room, but has been deferred for now to prioritize core functionality.
+A detailed list of security tests can be found in `security.txt`. 28/37 tests passed, so approximately 76% of unauthorized actions were reduced with the command and role-based access control system.
 
-Several tests were conducted to evaluate this program's security. We concluded that, from before role-based access control and moderation features were added (/super and /mod commands), to after, unauthorized actions were reduced by over 80%. The tests ran were:
-- Penetration Testing: Simulate unauthorized access by attempting privilege escalation, bypassing command restrictions, and injecting malicious payloads into your command parser.
-  - Deleting a room as a non-Owner
-  - Banning/muting users without permission
-  - blah blah blahh
-- Role-Based Access Validation: Run automated tests where users with lower privileges attempt to execute higher-level commands (e.g., regular users running admin/mod-only commands).
-- Command Injection and Parsing Security: Fuzz-testing inputs to identify any edge-case parsing vulnerabilities or unexpected command behavior.
-- Clientside State Persistence & Integrity Tests: Repeatedly attempt manual or scripted unauthorized modifications to JSON files representing room/user data to ensure state integrity is maintained.
-- Direct JSON data modifications
+If you would like a deeper look into the security of this program, please check the text file listed above. Since it is a LAN-based application, not over the whole Internet, it is expected to only be used by trusted individuals. While many security precautions were taken, some vulnerabilities do still remain.
 
-If a user were to access the server's machine and tamper with the JSON storage, this remains a security vulnerability since data is stored entirely locally. However, if the server's machine is kept to only trusted users, the data will remain safe.
+Some remaining vulnerabilities include:
+- Server data not being protected from individuals who gain access to the server's machine
+- Command-based messages not be end-to-end encrypted
+- Brute-forcing logins, due to no rate limiting in the lobby
+- No input validation for Unicode/emoji characters in usernames/rooms, which clients cannot properly decrypt messages from
 
 ## Screenshots
 

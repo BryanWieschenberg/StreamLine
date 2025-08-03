@@ -494,7 +494,7 @@ pub fn parse_command(input: &str) -> Command {
         ["r", "delete", ..] |
         ["room", "d", ..] |
         ["r", "d", ..] => {
-            let err_msg = format!("{}", "Usage: /room delete <room name> force?".bright_blue());
+            let err_msg = format!("{}", "Usage: /room delete force? <room name>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
@@ -513,7 +513,7 @@ pub fn parse_command(input: &str) -> Command {
 
         ["room", ..] |
         ["r", ..] => {
-            let err_msg = format!("{}", "Room commands:\n> /room list\n> /room create <room name> whitelist?\n> /room join <room name>\n> /room import <filename>\n> /room delete <room name> force?".bright_blue());
+            let err_msg = format!("{}", "Room commands:\n> /room list\n> /room create <room name> whitelist?\n> /room join <room name>\n> /room import <filename>\n> /room delete force? <room name>".bright_blue());
             Command::InvalidSyntax { err_msg }
         },
 
