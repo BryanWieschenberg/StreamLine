@@ -173,6 +173,8 @@ Default User Commands:
 - `seen`
 - `user`
 
+---
+
 ## Security
 
 A detailed list of security tests can be found in `security.txt`. 28/37 tests passed, so approximately 76% of unauthorized actions were reduced with the command and role-based access control system.
@@ -184,6 +186,8 @@ Some remaining vulnerabilities include:
 - Command-based messages not be end-to-end encrypted
 - Brute-forcing logins, due to no rate limiting in the lobby
 - No input validation for Unicode/emoji characters in usernames/rooms, which clients cannot properly decrypt messages from
+
+---
 
 ## Screenshots
 
