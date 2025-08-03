@@ -541,8 +541,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             let new_room = json!({
                 "whitelist_enabled": whitelist,
                 "whitelist": if whitelist { vec![username.clone()] } else { Vec::<String>::new() },
-                "msg_rate": 60,
-                "session_timeout": 10,
+                "msg_rate": 10,
+                "session_timeout": 3600,
                 "roles": {
                     "moderator": ["afk", "seen", "msg", "me", "super.users", "user", "mod"],
                     "user": ["afk", "seen", "msg", "me", "user"],
@@ -559,8 +559,15 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                         "color": "",
                         "role": "owner",
                         "hidden": false,
-                        "muted": "",
-                        "banned": ""
+                        "last_seen": 0,
+                        "banned": false,
+                        "ban_stamp": 0,
+                        "ban_length": 0,
+                        "ban_reason": "",
+                        "muted": false,
+                        "mute_stamp": 0,
+                        "mute_length": 0,
+                        "mute_reason": ""
                     }
                 }
             });

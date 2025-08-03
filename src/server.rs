@@ -17,7 +17,7 @@ use crate::utils::{check_mute, format_broadcast, lock_client, lock_clients, lock
 pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()> {
     loop {
         // Check for inactive clients every 60 seconds
-        thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(60));
         let now = SystemTime::now();
 
         // Get each room's timeout
