@@ -72,23 +72,3 @@ pub static USERS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 pub static ROOMS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 pub type PublicKeys = Arc<Mutex<HashMap<String, String>>>;
-
-// --- For future TUI implementation ---
-#[allow(dead_code)]
-pub enum InputMode {
-    Normal,
-    Autocomplete,
-    History,
-}
-
-#[allow(dead_code)]
-pub struct AppState {
-    pub input: String,                  // What the user is currently typing
-    pub messages: Vec<String>,          // Message history (chat window)
-    pub suggestions: Vec<String>,       // Autocomplete suggestions
-    pub selected_suggestion: usize,     // Index of selected suggestion (if any)
-    pub input_mode: InputMode,          // Typing vs navigating suggestions
-    pub history_index: Option<usize>,   // For up/down command history cycling
-    pub msg_history: Vec<String>,       // Message history
-}
-// -------------------------------------

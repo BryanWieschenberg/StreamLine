@@ -149,7 +149,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
         locked.insert(peer, Arc::clone(&client_arc));
     }
 
-    println!("Guest ({peer}) connected");
+    println!("Address {peer} connected");
 
     // Read messages from the client and broadcast them to all other clients
     for line in reader.lines() {
