@@ -610,8 +610,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             let room_obj = Room {
                 whitelist_enabled: whitelist,
                 whitelist: if whitelist { vec![username.clone()] } else { vec![] },
-                msg_rate: 60,
-                session_timeout: 10,
+                msg_rate: 10,
+                session_timeout: 3600,
                 roles,
                 users,
                 online_users: Vec::new(),
