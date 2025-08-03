@@ -67,6 +67,7 @@ pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()
                         let room_name = room.clone();
 
                         client.state = ClientState::LoggedIn { username: user.clone() };
+                        writeln!(client.stream, "{}", format!("/LOBBY_STATE"))?;
                         writeln!(client.stream, "{}", "Session timed out, returned to lobby".yellow())?;
                         drop(client);
 

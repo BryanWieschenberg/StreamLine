@@ -1717,6 +1717,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                         } else {
                             format!("You have been kicked from {room}: {reason}")
                         };
+                        writeln!(c.stream, "{}", format!("/LOBBY_STATE"))?;
                         writeln!(c.stream, "{}", msg.red())?;
                         c.state = ClientState::LoggedIn { username: username.clone() };
                         kicked = true;
@@ -1837,6 +1838,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                         } else {
                             format!("You have been banned from {room} ({reason})\n> {human_len}")
                         };
+                        writeln!(c.stream, "{}", format!("/LOBBY_STATE"))?;
                         writeln!(c.stream, "{}", msg.red())?;
                         c.state = ClientState::LoggedIn { username: username.clone() };
                         break;
