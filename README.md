@@ -187,4 +187,32 @@ Some remaining vulnerabilities include:
 
 ## Screenshots
 
-![First img](https://imgur.com/a/sKxKfEn)
+**Registering an Account and Creating a Room**
+
+This is the initial flow of StreamLine. A user registers a new account using the `/account register` command, then checks for existing rooms using `/room list`. Since no rooms are found, the user creates a new room (MyRoom) with `/room create`, and verifies its creation through a second `/room list` call. Finally, the user joins the room with `/room join` and sends a message.
+
+![Alt text](https://i.imgur.com/vbVQbk2.png)
+
+**Joining Rooms and Chatting**
+
+This shows a user joining an existing room and participating in the chat. After registering with a shorthand command (`/a r` for `/account register`), the user lists available rooms using `/room list` and joins MyRoom with `/room join`. Upon entry, the user sees ongoing messages from other participants, with usernames and roles (e.g., [Owner], [User]) shown.
+
+![](https://i.imgur.com/Ji7Kj0y.png)
+
+**Conversations**
+
+Shows a real conversation within a chatroom. Users are granted roles such as Mod and Admin using commands like `/super roles assign mod Alice` (or `/s r as mod Alice` for short), visibly updating their chat labels in real-time. It also shows private messaging with `/msg`.
+
+![](https://i.imgur.com/DIrFdZ9.png)
+
+**Moderation**
+
+This shows the built-in moderation tools available to authorized users for handling disruptive behavior. After detecting spam messages, a moderator uses the `/mod mute` command to temporarily silence the offender (Billy) for one minute with a specified reason (Spam). The system confirms the action and displays a live countdown of the mute duration with `/mod info`.
+
+![Moderation](https://i.imgur.com/hI5U0dN.png)
+
+**End-to-End Encryption**
+
+The serverside view of messages received by users, which are encrypted and never actually understood by the server, only serving to send the encrypted message to the correct recipient. Each regular message (non-command) shows the recipient and their public key, to allow the recipient to decrypt the message using their private key. In this exaxmple, there were 3 online users, and 3 messages were sent, meaning each message produced 2 encrypted messages, one per recipient.
+
+![End-to-End Encryption](https://i.imgur.com/aTm3gU1.png)
