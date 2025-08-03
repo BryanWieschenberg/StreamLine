@@ -93,7 +93,7 @@ pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()
     }
 }
 
-pub fn check_rate_limit(client_arc: &Arc<Mutex<Client>>, rooms: &Rooms) -> std::io::Result<bool> {
+pub fn check_rate_limit(client_arc: &Arc<Mutex<Client>>, rooms: &Rooms, is_first: bool) -> std::io::Result<bool> {
     let now = Instant::now();
 
     let mut c = lock_client(client_arc)?;
@@ -123,11 +123,15 @@ pub fn check_rate_limit(client_arc: &Arc<Mutex<Client>>, rooms: &Rooms) -> std::
         }
 
         if rate > 0 && msg_timestamps.len() as u8 >= rate {
-            writeln!(c.stream, "{}", "Rate limit exceeded, slow down your messages!".yellow())?;
+            if is_first {
+                writeln!(c.stream, "{}", "Rate limit exceeded, slow down your messages!".yellow())?;
+            }
             return Ok(false);
         }
 
-        msg_timestamps.push_back(now);
+        if is_first {
+            msg_timestamps.push_back(now);
+        }
     }
     Ok(true)
 }
@@ -161,7 +165,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                 if msg.is_empty() { continue };
 
                 // Optional: Have server print what it sees from E2EE perspective
-                // println!("{}", msg);
+                // if msg != "/members? normal" { println!("{}", msg) };
 
                 // Update last seen time for the client and reset AFK status
                 {
@@ -322,11 +326,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                     }
                 }
 
-                let allowed = check_rate_limit(&client_arc, &rooms)?;
-                if !allowed {
-                    continue;
-                }
-
                 let mut sender = lock_client(&client_arc)?;
                 
                 match &sender.state {
@@ -335,23 +334,29 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                         let room_name = room.clone();
                         drop(sender);
 
+
+                        let (role_prefix, display_name) = format_broadcast(&rooms, &room_name, &username)?;
+                        
+                        let mut pieces: Vec<&str> = msg.split_whitespace().collect();
+                        if pieces.len() < 2 { continue; }
+
+                        let is_first = pieces.last() == Some(&"f");
+                        if is_first { pieces.pop(); }
+
+                        let recipient   = pieces[0];
+                        let ciphertext  = pieces[1];
+
                         if let Some(msg) = check_mute(&rooms, &room_name, &username)? {
-                            let mut client = lock_client(&client_arc)?;
-                            writeln!(client.stream, "{}", msg.red())?;
+                            if is_first {
+                                let mut client = lock_client(&client_arc)?;
+                                writeln!(client.stream, "{}", msg.red())?;
+                            }
                             continue;
                         }
 
-                        let (role_prefix, display_name) = format_broadcast(&rooms, &room_name, &username)?;
-                        let mut parts = msg.splitn(2, ' ');
-                        let Some(recipient) = parts.next() else {
-                            eprintln!("Missing recipient in encrypted message");
+                        if !check_rate_limit(&client_arc, &rooms, is_first)? {
                             continue;
-                        };
-
-                        let Some(ciphertext) = parts.next() else {
-                            eprintln!("Missing ciphertext in encrypted message");
-                            continue;
-                        };
+                        }
 
                         if recipient.is_empty() || ciphertext.is_empty() {
                             continue;

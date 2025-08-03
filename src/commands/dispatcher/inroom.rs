@@ -1158,7 +1158,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         Command::SuperRolesAssign { role, users } => {
             let target_role = match role.to_lowercase().as_str() {
                 "usr" | "user" => "user",
-                "mod" | "moderator" => "mod",
+                "mod" | "moderator" => "moderator",
                 "admin" | "administrator" => "admin",
                 "owner" | "creator" | "founder" => "owner",
                 _ => {
@@ -1206,12 +1206,12 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                             return Ok(CommandResult::Handled);
                         }
                     }
-                }
 
-                let new_owner = users_vec[0];
-                if target_role == "owner" {
+                    let new_owner = users_vec[0];
+    
                     let mut client = lock_client(&client)?;
                     writeln!(client.stream, "{}", format!("Assigning {new_owner} as owner will transfer room ownership to them. Are you sure you want to do this? (y/n): ").red())?;
+    
                     let mut reader = std::io::BufReader::new(client.stream.try_clone()?);
                     loop {
                         let mut line = String::new();
@@ -1228,6 +1228,14 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                             }
                             _ => {
                                 writeln!(client.stream, "{}", "(y/n): ".red())?;
+                            }
+                        }
+                    }
+                    
+                    if new_owner != username {
+                        if let Some(cur_owner) = room_guard.users.get_mut(username) {
+                            if cur_owner.role == "owner" {
+                                cur_owner.role = "admin".to_string();
                             }
                         }
                     }
@@ -1252,14 +1260,6 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                     if entry.role != target_role {
                         entry.role = target_role.to_string();
                         assigned.push(u.to_string());
-                    }
-                }
-
-                if new_owner != username {
-                    if let Some(cur_owner) = room_guard.users.get_mut(username) {
-                        if cur_owner.role == "owner" {
-                            cur_owner.role = "admin".to_string();
-                        }
                     }
                 }
 
@@ -1290,10 +1290,10 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
 
         Command::SuperRolesRecolor { role, color } => {
             let role_key = match role.to_lowercase().as_str() {
-                "user"        => "user",
-                "mod" | "moderator" => "mod",
-                "admin"       => "admin",
-                "owner"       => "owner",
+                "user" => "user",
+                "mod" | "moderator" => "moderator",
+                "admin" => "admin",
+                "owner" => "owner",
                 _ => {
                     let mut client = lock_client(&client)?;
                     writeln!(client.stream, "{}", "Error: Role must be user|mod|admin|owner".yellow())?;

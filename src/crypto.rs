@@ -129,10 +129,17 @@ pub fn decrypt(msg: &str) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 pub fn broadcast_message(stream: &mut TcpStream, members: &HashMap<String, String>, msg: &str) -> io::Result<()> {
+    let mut first = true;
     for (recipient, pubkey) in members {
         match encrypt(msg, pubkey) {
             Ok(cipher_b64) => {
-                let wire = format!("{recipient} {cipher_b64}");
+                let wire = if first {
+                    first = false;
+                    format!("{recipient} {cipher_b64} f")
+                } else {
+                    format!("{recipient} {cipher_b64}")
+                };
+
                 stream.write_all(wire.as_bytes())?;
                 stream.write_all(b"\n")?;
             }

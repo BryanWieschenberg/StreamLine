@@ -549,7 +549,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                     "colors": {
                         "owner": "#FFD700",
                         "admin": "#FF3030",
-                        "mod": "#0080FF",
+                        "moderator": "#0080FF",
                         "user": "FFFFFF"
                     }
                 },
