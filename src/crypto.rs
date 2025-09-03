@@ -30,7 +30,10 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
     if !Path::new("data/keys.json").exists() {
         fs::write("data/keys.json", b"{}")?;
         #[cfg(unix)]
-        fs::set_permissions("data/keys.json", fs::Permissions::from_mode(0o600))?;
+        {
+            let perms = fs::Permissions::from_mode(0o600);
+            fs::set_permissions("data/keys.json", perms)?;
+        }
     }
 
     // Load existing key map; tolerate empty/corrupt JSON
