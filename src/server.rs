@@ -16,11 +16,9 @@ use crate::utils::{check_mute, format_broadcast, lock_client, lock_clients, lock
 
 pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()> {
     loop {
-        // Check for inactive clients every 60 seconds
         thread::sleep(Duration::from_secs(60));
         let now = SystemTime::now();
 
-        // Get each room's timeout
         let room_timeouts: HashMap<String, u32> = {
             let rooms_guard = match rooms.lock() {
                 Ok(g)  => g,
@@ -40,7 +38,6 @@ pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()
             Err(_)  => continue,
         };
 
-        // Evaluate each client for inactivity
         for client_arc in client_arcs {
             if let Ok(mut client) = client_arc.lock() {
                 if let ClientState::InRoom { username, room, inactive_time, .. } = &mut client.state {
@@ -48,7 +45,7 @@ pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()
                         Some(t) => *t,
                         None => 0,
                     };
-                    if timeout == 0 { continue; } // Unlimited session time for that room
+                    if timeout == 0 { continue; }
 
                     let last_seen = match inactive_time {
                         Some(t) => *t,
@@ -62,7 +59,6 @@ pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()
 
                     if idle_secs >= timeout as u64
                     {
-                        // Kick to lobby
                         let user = username.clone();
                         let room_name = room.clone();
 
@@ -75,12 +71,11 @@ pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()
                             let rooms_map = lock_rooms(&rooms)?;
                             if let Some(room_arc) = rooms_map.get(&room_name) {
                                 if let Ok(mut r) = room_arc.lock() {
-                                    r.online_users.retain(|u| u != &user);   // ← remove from list
+                                    r.online_users.retain(|u| u != &user);
                                 }
                             }
                         }
 
-                        // Get current unix time and update client's last_seen value for their current room
                         if let Err(e) = unix_timestamp(&rooms, &room_name, &user) {
                             eprintln!("Error updating last_seen for {user} in {room_name}: {e}");
                         }
@@ -136,7 +131,6 @@ pub fn check_rate_limit(client_arc: &Arc<Mutex<Client>>, rooms: &Rooms, is_first
     Ok(true)
 }
 
-// Handler for each client connection on a separate thread
 fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: Rooms, pubkeys: PublicKeys) -> std::io::Result<()> {
     let reader = BufReader::new(stream.try_clone()?);
 
@@ -148,7 +142,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
         pubkey: String::new()
     }));
 
-    // Insert the new client into the clients map
     {
         let mut locked = lock_clients(&clients)?;
         locked.insert(peer, Arc::clone(&client_arc));
@@ -156,7 +149,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
     println!("Address {peer} connected");
 
-    // Read messages from the client and broadcast them to all other clients
     for line in reader.lines() {
         match line {
             Ok(msg) => {
@@ -164,10 +156,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
                 if msg.is_empty() { continue };
 
-                // Optional: Have server print what it sees from E2EE perspective
-                // if msg != "/members? normal" { println!("{}", msg) };
-
-                // Update last seen time for the client and reset AFK status
                 {
                     let mut s = lock_client(&client_arc)?;
                     if let ClientState::InRoom { inactive_time, is_afk, .. } = &mut s.state {
@@ -223,7 +211,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                                         continue;
                                     }
 
-                                    // Skip if recipient has sender ignored
                                     if client.ignore_list.contains(&username) {
                                         continue;
                                     }
@@ -334,7 +321,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                         let room_name = room.clone();
                         drop(sender);
 
-
                         let (role_prefix, display_name) = format_broadcast(&rooms, &room_name, &username)?;
                         
                         let mut pieces: Vec<&str> = msg.split_whitespace().collect();
@@ -395,7 +381,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
         };
     }
 
-    // Disconnection cleanup
     let removed = {
         let mut locked = lock_clients(&clients)?;
         locked.remove(&peer)
@@ -414,7 +399,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
     Ok(())
 }
 
-// Main function to set up the TCP server and handle incoming connections
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() > 2 {
@@ -439,7 +423,6 @@ fn main() -> std::io::Result<()> {
     let room_reader = BufReader::new(room_file);
     let parsed_rooms: HashMap<String, Room> = serde_json::from_reader(room_reader)?;
 
-    // Convert into Arc<Mutex<Room>>
     let mut rooms_map: HashMap<String, Arc<Mutex<Room>>> = HashMap::new();
     for (name, room) in parsed_rooms {
         rooms_map.insert(name, Arc::new(Mutex::new(room)));
@@ -453,7 +436,6 @@ fn main() -> std::io::Result<()> {
         let clients = Arc::clone(&clients);
         let rooms = Arc::clone(&rooms);
 
-        // Start the session housekeeper thread
         thread::Builder::new()
             .name("session-housekeeper".into())
             .spawn(move || {
@@ -463,13 +445,11 @@ fn main() -> std::io::Result<()> {
             })?;
     }
 
-    // Main loop to accept incoming connections
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 let peer = stream.peer_addr()?;
 
-                // Clone clients Arc and use the clone in the thread
                 let clients = Arc::clone(&clients);
                 let rooms = Arc::clone(&rooms);
                 let pubkeys = Arc::clone(&pubkeys);

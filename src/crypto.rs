@@ -13,7 +13,6 @@ use rsa::{pkcs8::EncodePublicKey, RsaPrivateKey, Oaep, RsaPublicKey};
 use pkcs8::{DecodePublicKey, EncodePrivateKey};
 use sha2::Sha256;
 
-// Client holds its own private key in memory
 pub static MY_PRIVKEY: OnceCell<RsaPrivateKey> = OnceCell::new();
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -23,7 +22,6 @@ struct PairJSON {
 }
 
 pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
-    // Ensure /data/keys.json exists with correct permissions
     if !Path::new("data").exists() {
         fs::create_dir_all("data")?;
     }
@@ -36,7 +34,6 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
         }
     }
 
-    // Load existing key map; tolerate empty/corrupt JSON
     let mut map: HashMap<String, PairJSON> = {
         let raw = match fs::read_to_string("data/keys.json") {
             Ok(content) => content,
@@ -56,7 +53,6 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
         }
     };
 
-    // Return existing key if present
     if let Some(pair) = map.get(username) {
         let priv_der = general_purpose::STANDARD
             .decode(&pair.privkey)
@@ -67,7 +63,6 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
         return Ok(pair.pubkey.clone());
     }
 
-    // Generate new key pair
     let priv_key = RsaPrivateKey::new(&mut OsRng, 1024)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("RSA gen failed: {e}")))?;
 
@@ -86,10 +81,8 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
     let pub_b64  = general_purpose::STANDARD.encode(pub_key_der);
     let priv_b64 = general_purpose::STANDARD.encode(priv_key_der);
 
-    // Store client's private key in memory
     let _ = MY_PRIVKEY.set(priv_key);
 
-    // Persist to keys.json atomically
     map.insert(
         username.to_owned(),
         PairJSON { pubkey: pub_b64.clone(), privkey: priv_b64 },
@@ -104,30 +97,22 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
 }
 
 pub fn encrypt(msg: &str, recipient_pubkey: &str) -> Result<String, Box<dyn std::error::Error>> {
-    // Decode recipient’s pubkey
     let der = general_purpose::STANDARD.decode(recipient_pubkey)?;
     
-    // Parse the public key
     let pub_key = RsaPublicKey::from_public_key_der(&der)?;
 
-    // Encrypt with RSA-OAEP-SHA256
     let ciphertext = pub_key.encrypt(&mut OsRng, Oaep::new::<Sha256>(), msg.as_bytes())?;
 
-    // Return Base64 ciphertext
     Ok(general_purpose::STANDARD.encode(ciphertext))
 }
 
 pub fn decrypt(msg: &str) -> Result<String, Box<dyn std::error::Error>> {
-    // Decode recipient's privkey
     let priv_key = MY_PRIVKEY.get().expect("Private key not initialized");
 
-    // Decode ciphertext from Base64 to bytes
     let cipherbytes = general_purpose::STANDARD.decode(msg)?;
 
-    // Decrypt with RSA-OAEP-SHA256
     let plaintext_bytes = priv_key.decrypt(Oaep::new::<Sha256>(), &cipherbytes)?;
 
-    // Convert from UTF-8 bytes and return String
     Ok(String::from_utf8(plaintext_bytes)?)
 }
 

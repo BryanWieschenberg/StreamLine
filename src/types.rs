@@ -67,7 +67,6 @@ pub struct RoomUser {
 
 pub type Rooms = Arc<Mutex<HashMap<String, Arc<Mutex<Room>>>>>;
 
-// User file access lock
 pub static USERS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 pub static ROOMS_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 

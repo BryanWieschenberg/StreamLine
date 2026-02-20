@@ -4,7 +4,6 @@ use crate::commands::command_utils::{duration_format_passes};
 impl ToString for Command {
     fn to_string(&self) -> String {
         match self {
-            // Not mapped to a permission since non-room commands are always available
             Command::Help |
             Command::Ping { .. } |
             Command::PubKey { .. } |
@@ -31,7 +30,6 @@ impl ToString for Command {
             Command::RoomImport { .. } |
             Command::RoomDelete { .. } => "",
 
-            // Permission mappings, since these commands can be enabled/disabled for certain roles
             Command::AFK => "afk",
             Command::DM { .. } => "msg",
             Command::Me { .. } => "me",
@@ -662,7 +660,7 @@ pub fn parse_command(input: &str) -> Command {
         ["s", "limit", "r", limit] |
         ["super", "l", "r", limit] |
         ["s", "l", "r", limit] => {
-            if *limit == "*" { // * means unlimited, msg_rate is set to 0 as special case
+            if *limit == "*" {
                 Command::SuperLimitRate { limit: 0 }
             }
             else {
@@ -695,7 +693,7 @@ pub fn parse_command(input: &str) -> Command {
         ["s", "limit", "s", limit] |
         ["super", "l", "s", limit] |
         ["s", "l", "s", limit] => {
-            if *limit == "*" { // * means unlimited, msg_rate is set to 0 as special case
+            if *limit == "*" {
                 Command::SuperLimitSession { limit: 0 }
             }
             else {

@@ -263,7 +263,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             let mut ser = Serializer::with_formatter(&mut writer, formatter);
             users.serialize(&mut ser)?;
 
-            let old_username = username.clone(); // store original
+            let old_username = username.clone();
             client.state = ClientState::LoggedIn { username: new_username.clone() };
 
             writeln!(client.stream, "{}", format!("/GUEST_STATE"))?;
@@ -738,7 +738,6 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 }
             }
 
-            // Add user to room's rooms.json users list if it's their first time joining
             if !room.users.contains_key(username) {
                 room.users.insert(username.clone(), RoomUser {
                     nick: "".to_string(),
@@ -785,12 +784,10 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 }
             }
 
-            // Add user to online list if not already there
             if !room.online_users.contains(username) {
                 room.online_users.push(username.clone());
             }
 
-            // Update client state
             let mut client = lock_client(&client)?;
             client.state = ClientState::InRoom {
                 username: username.clone(),

@@ -98,7 +98,6 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
 
             let mut client = lock_client(&client)?;
             client.state = ClientState::LoggedIn { username: username.clone() };
-            // Have client generate/load privkey for this account
             writeln!(client.stream, "{}", format!("/LOGIN_OK {}", username))?;
 
             writeln!(client.stream, "{}", format!("User Registered: {}", username).green())?;
@@ -134,7 +133,6 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
                         client.ignore_list = user_obj.get("ignore")
                             .and_then(|v| v.as_array())
                             .map_or_else(Vec::new, |arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
-                        // Have client generate/load privkey for this account
                         writeln!(client.stream, "{}", format!("/LOGIN_OK {}", username))?;
 
                         writeln!(client.stream, "{}", format!("Logged in as: {}", username).green())?;

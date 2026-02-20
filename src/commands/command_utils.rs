@@ -166,7 +166,7 @@ pub fn check_role_permissions(role: &str, command: &str, roles: &Roles) -> bool 
     }
 
     match role {
-        "owner" | "admin" => true, // full access
+        "owner" | "admin" => true,
         "moderator" => granted(&roles.moderator, command),
         "user"      => granted(&roles.user, command),
         _ => false,
@@ -210,12 +210,12 @@ pub fn has_permission(cmd: &Command, client: Arc<Mutex<Client>>, rooms: &Rooms, 
 }
 
 pub fn save_rooms_to_disk(map: &HashMap<String, Arc<Mutex<Room>>>) -> std::io::Result<()> {
-    let _lock = lock_rooms_storage()?; // handle poisoned lock gracefully
+    let _lock = lock_rooms_storage()?;
 
     let mut snapshot = HashMap::new();
     for (name, arc) in map.iter() {
         if let Ok(room) = arc.lock() {
-            snapshot.insert(name.clone(), room.clone());     // online_users skipped by serde
+            snapshot.insert(name.clone(), room.clone());
         } else {
             eprintln!("Failed to lock room '{}'", name);
         }
@@ -242,13 +242,13 @@ pub fn unix_timestamp(rooms: &Rooms, room_name: &str, username: &str) -> io::Res
                 if let Some(entry) = room_guard.users.get_mut(username) {
                     entry.last_seen = ts;
                 } else {
-                    return Ok(()); // User not found, nothing to do
+                    return Ok(());
                 }
             } else {
-                return Ok(()); // Failed to lock room, skip
+                return Ok(());
             }
         } else {
-            return Ok(()); // Room not found
+            return Ok(());
         }
     }
 
@@ -274,10 +274,9 @@ pub fn duration_format_passes(duration: &str) -> bool{
     if duration == "*" {
         true
     } else {
-        // Regex for patterns like 10d5h3m2s, any order, each component is optional but must have valid suffix
         let re = match regex::Regex::new(r"^(\d+d)?(\d+h)?(\d+m)?(\d+s)?$") {
             Ok(r) => r,
-            Err(_) => return false, // Invalid regex
+            Err(_) => return false,
         };
         re.is_match(duration)
     };
@@ -285,7 +284,6 @@ pub fn duration_format_passes(duration: &str) -> bool{
     true
 }
 
-// Parses a duration string like "10d5h3m2s" from ModBan/ModMute into seconds
 pub fn parse_duration(spec: &str) -> io::Result<u64> {
     if spec == "*" { return Ok(0); }
     let mut secs: u64 = 0;

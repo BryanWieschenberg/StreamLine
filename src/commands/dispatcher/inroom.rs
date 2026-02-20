@@ -91,7 +91,6 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 }
             }
 
-            // Get current unix time and update client's last_seen value for their current room
             if let Err(e) = unix_timestamp(rooms, room, username) {
                 eprintln!("Error updating last_seen for {username} in {room}: {e}");
             }
@@ -117,7 +116,6 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 }
             }
 
-            // Get current unix time and update client's last_seen value for their current room
             if let Err(e) = unix_timestamp(rooms, room, username) {
                 eprintln!("Error updating last_seen for {username} in {room}: {e}");
             }
@@ -454,7 +452,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                             Ok(d)  => d.as_secs(),
                             Err(_) => 0,
                         };
-                        let diff = now_secs.saturating_sub(info.last_seen); // last_seen is u64
+                        let diff = now_secs.saturating_sub(info.last_seen);
 
                         let days = diff / 86_400;
                         let hrs  = (diff % 86_400) / 3_600;
@@ -617,7 +615,6 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
 
             rooms_map.insert(name.clone(), Arc::clone(&room_arc));
 
-            // Update all clients currently in the renamed room
             let clients_map = lock_clients(clients)?;
             for client_arc in clients_map.values() {
                 let mut c = lock_client(client_arc)?;
@@ -628,7 +625,6 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 }
             }
 
-            // Save updated room list to disk
             let _room_save_lock = lock_rooms_storage()?;
             let serializable_map: HashMap<_, _> = rooms_map.iter()
                 .filter_map(|(k, v)| {
@@ -1001,13 +997,13 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
 
             for cmd in all_cmds {
                 let m_disp = if mod_cmds.contains(&cmd.to_string()) {
-                    "M".bright_yellow().bold().to_string()   // orange, bold
+                    "M".bright_yellow().bold().to_string()
                 } else {
                     " ".to_string()
                 };
 
                 let u_disp = if user_cmds.contains(&cmd.to_string()) {
-                    "U".white().bold().to_string()                         // white, bold
+                    "U".white().bold().to_string()
                 } else {
                     " ".to_string()
                 };
@@ -1571,14 +1567,12 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 let mut muted_vec  = Vec::<String>::new();
 
                 for (uname, rec) in room_guard.users.iter_mut() {
-                    // Ban handling
                     if rec.banned {
                         let still_banned = if rec.ban_length == 0 {
                             true
                         } else {
                             let expire = rec.ban_stamp.saturating_add(rec.ban_length);
                             if now >= expire {
-                                // Ban expired, clear flags
                                 rec.banned = false;
                                 rec.ban_stamp = 0;
                                 rec.ban_length = 0;
@@ -1606,7 +1600,6 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                         }
                     }
 
-                    // Mute handling
                     if rec.muted {
                         let still_muted = if rec.mute_length == 0 {
                             true
@@ -1777,11 +1770,9 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 Err(_) => 0,
             };
 
-            // Apply/create ban record
             {
                 let mut rg = lock_room(&room_arc)?;
 
-                // Add entry if not present
                 let user_rec = rg.users.entry(username.clone()).or_insert(RoomUser {
                     nick: "".to_string(),
                     color: "".to_string(),
@@ -1804,14 +1795,11 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 user_rec.ban_reason  = reason.clone();
                 user_rec.last_seen   = now;
 
-                // Remove from online list if present
                 rg.online_users.retain(|u| u != &username);
             }
 
-            // Refresh last_seen helper
             let _ = unix_timestamp(rooms, room, &username);
 
-            // Kick client if online
             let clients_map = lock_clients(clients)?;
             let human_len = if ban_secs == 0 {
                 "PERMANENT".to_string()
@@ -1947,7 +1935,6 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 Err(_) => 0,
             };
 
-            // Apply/create mute record
             {
                 let mut rg = lock_room(&room_arc)?;
                 let rec = rg.users.entry(username.clone()).or_insert(RoomUser {
@@ -1973,10 +1960,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 rec.last_seen   = now;
             }
 
-            // Refresh last_seen helper
             let _ = unix_timestamp(rooms, room, &username);
 
-            // Notify live client
             let clients_map = lock_clients(clients)?;
             let human_len = if mute_secs == 0 {
                 "PERMANENT".to_string()

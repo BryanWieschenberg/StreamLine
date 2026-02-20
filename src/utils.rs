@@ -35,7 +35,6 @@ pub fn broadcast_message(clients: &Clients, room_name: &str, sender: &str, msg: 
     Ok(())
 }
 
-// Check if the user is muted in a specific room
 pub fn check_mute(rooms: &Rooms, room: &str, username: &str) -> io::Result<Option<String>> {
     let room_arc = {
         let rooms_map = lock_rooms(rooms)?;
@@ -83,7 +82,6 @@ pub fn check_mute(rooms: &Rooms, room: &str, username: &str) -> io::Result<Optio
                         format!("You are muted: {}\n> {remaining}", rec.mute_reason)
                     });
                 } else {
-                    // Mute expired, lift it
                     rec.muted = false;
                     rec.mute_stamp = 0;
                     rec.mute_length = 0;
@@ -119,7 +117,6 @@ pub fn format_broadcast(rooms: &Rooms, room_name: &str, username: &str) -> io::R
     let mut display_name = username.to_string();
 
     if let Some(info) = user_info {
-        // Role prefix and color
         let role_key = info.role.to_lowercase();
         if let Some(hex) = rg.roles.colors.get(&role_key) {
             let prefix = match role_key.as_str() {
@@ -131,7 +128,6 @@ pub fn format_broadcast(rooms: &Rooms, room_name: &str, username: &str) -> io::R
             prefix_colored = prefix.truecolor_from_hex(hex).to_string();
         }
 
-        // Nick italicized or fallback to username
         if !info.nick.is_empty() {
             if !info.color.is_empty() {
                 display_name = info.nick.as_str().truecolor_from_hex(&info.color).italic().to_string();

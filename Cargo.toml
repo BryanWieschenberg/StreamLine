@@ -16,6 +16,8 @@ rand = "0.8"
 base64 = "0.21"
 rsa = "0.9"
 pkcs8 = "0.10"
+ratatui = "0.30.0"
+crossterm = "0.29.0"
 
 [[bin]]
 name = "server"
