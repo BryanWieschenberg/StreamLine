@@ -1,4 +1,5 @@
 use std::io::{self, BufReader, Write};
+use std::time::Instant;
 use std::fs::{File, OpenOptions};
 use serde::Serialize;
 use serde_json::{Value, json, Serializer};
@@ -61,6 +62,17 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
         }
 
         Command::AccountRegister {username, password, confirm} => {
+            {
+                let mut c = lock_client(&client)?;
+                let now = Instant::now();
+                c.login_attempts.retain(|t| now.duration_since(*t).as_secs() < 60);
+                if c.login_attempts.len() >= 5 {
+                    writeln!(c.stream, "{}", "Too many attempts, try again later".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+                c.login_attempts.push_back(now);
+            }
+
             if password != confirm {
                 let mut client = lock_client(&client)?;
                 writeln!(client.stream, "{}", "Error: Passwords don't match".yellow())?;
@@ -105,6 +117,17 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
         }
 
         Command::AccountLogin {username, password} => {
+            {
+                let mut c = lock_client(&client)?;
+                let now = Instant::now();
+                c.login_attempts.retain(|t| now.duration_since(*t).as_secs() < 60);
+                if c.login_attempts.len() >= 5 {
+                    writeln!(c.stream, "{}", "Too many login attempts, try again later".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+                c.login_attempts.push_back(now);
+            }
+
             if is_user_logged_in(clients, &username) {
                 let mut client = lock_client(&client)?;
                 writeln!(client.stream, "{}", format!("Error: {} is already logged in", username).yellow())?;

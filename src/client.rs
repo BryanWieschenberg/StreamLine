@@ -35,6 +35,7 @@ static MY_STATE: Lazy<Mutex<ClientState>> = Lazy::new(|| Mutex::new(ClientState:
 
 static CURRENT_USER: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
 static CURRENT_ROOM: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
+static MY_ROLE: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
 
 fn get_room_members() -> HashMap<String, String> {
     let (lock, cvar) = &*MEMBERS;
@@ -68,17 +69,23 @@ const C_RED: Color = Color::Red;
 const C_GREEN: Color = Color::Green;
 const C_SYSTEM: Color = Color::Blue;
 
-const COMMANDS: &[&str] = &[
+const COMMANDS_ALWAYS: &[&str] = &[
     "/help",
     "/clear",
     "/quit",
     "/ping",
+];
+
+const COMMANDS_GUEST: &[&str] = &[
     "/account register",
     "/account login",
+    "/account import",
+];
+
+const COMMANDS_LOGGEDIN: &[&str] = &[
     "/account logout",
     "/account edit username",
     "/account edit password",
-    "/account import",
     "/account export",
     "/account delete",
     "/account delete force",
@@ -89,11 +96,14 @@ const COMMANDS: &[&str] = &[
     "/room import",
     "/room delete",
     "/room delete force",
-    "/room leave",
     "/ignore",
     "/ignore list",
     "/ignore add",
     "/ignore remove",
+];
+
+const COMMANDS_INROOM: &[&str] = &[
+    "/room leave",
     "/leave",
     "/status",
     "/afk",
@@ -101,9 +111,27 @@ const COMMANDS: &[&str] = &[
     "/me",
     "/seen",
     "/announce",
+    "/user",
+    "/user list",
+    "/user rename",
+    "/user recolor",
+    "/user hide",
+];
+
+const COMMANDS_MOD: &[&str] = &[
+    "/mod",
+    "/mod kick",
+    "/mod ban",
+    "/mod unban",
+    "/mod mute",
+    "/mod unmute",
+    "/mod info",
+];
+
+const COMMANDS_SUPER: &[&str] = &[
     "/super",
     "/super users",
-    "/super remame",
+    "/super rename",
     "/super export",
     "/super whitelist",
     "/super whitelist info",
@@ -119,17 +147,6 @@ const COMMANDS: &[&str] = &[
     "/super roles revoke",
     "/super roles assign",
     "/super roles recolor",
-    "/user",
-    "/user list",
-    "/user rename",
-    "/user recolor",
-    "/user hide",
-    "/mod",
-    "/mod kick",
-    "/mod ban",
-    "/mod unban",
-    "/mod mute",
-    "/mod unmute"
 ];
 
 enum AppMessage {
@@ -297,7 +314,35 @@ impl Autocomplete {
         self.index = None;
 
         if input.starts_with('/') {
-            for &cmd in COMMANDS {
+            let state = MY_STATE.lock().ok();
+            let role = MY_ROLE.lock().ok();
+            let role_str = role.as_deref().map(|s| s.as_str()).unwrap_or("");
+
+            let mut available: Vec<&str> = COMMANDS_ALWAYS.iter().copied().collect();
+
+            match state.as_deref() {
+                Some(ClientState::Guest) | None => {
+                    available.extend(COMMANDS_GUEST.iter().copied());
+                }
+                Some(ClientState::LoggedIn) => {
+                    available.extend(COMMANDS_LOGGEDIN.iter().copied());
+                }
+                Some(ClientState::InRoom) => {
+                    available.extend(COMMANDS_LOGGEDIN.iter().copied());
+                    available.extend(COMMANDS_INROOM.iter().copied());
+                    match role_str {
+                        "owner" | "admin" => {
+                            available.extend(COMMANDS_MOD.iter().copied());
+                            available.extend(COMMANDS_SUPER.iter().copied());
+                        }
+                        "moderator" => {
+                            available.extend(COMMANDS_MOD.iter().copied());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            for cmd in available {
                 if cmd.starts_with(input) {
                     self.candidates.push(cmd.to_string());
                 }
@@ -338,7 +383,7 @@ struct App {
     should_quit: bool,
     autocomplete: Autocomplete,
     member_names: Vec<String>,
-    completion_hint: Option<String>,
+
     status: String,
     scroll_offset: usize,
     input_history: Vec<String>,
@@ -357,7 +402,7 @@ impl App {
             should_quit: false,
             autocomplete: Autocomplete::new(),
             member_names: Vec::new(),
-            completion_hint: None,
+
             status: String::from("Not logged in"),
             scroll_offset: 0,
             input_history: Vec::new(),
@@ -423,10 +468,18 @@ fn handle_control_packets(stream: &mut TcpStream, msg: &str, tx: &Sender<AppMess
         return Ok(());
     }
 
+    if let Some(role) = msg.strip_prefix("/ROLE ") {
+        if let Ok(mut r) = MY_ROLE.lock() {
+            *r = role.trim().to_string();
+        }
+        return Ok(());
+    }
+
     if msg == "/LOBBY_STATE" {
         let mut state = MY_STATE.lock().map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
         *state = ClientState::LoggedIn;
         if let Ok(mut r) = CURRENT_ROOM.lock() { r.clear(); }
+        if let Ok(mut r) = MY_ROLE.lock() { r.clear(); }
         return Ok(());
     }
 
@@ -435,6 +488,7 @@ fn handle_control_packets(stream: &mut TcpStream, msg: &str, tx: &Sender<AppMess
         *state = ClientState::Guest;
         if let Ok(mut u) = CURRENT_USER.lock() { u.clear(); }
         if let Ok(mut r) = CURRENT_ROOM.lock() { r.clear(); }
+        if let Ok(mut r) = MY_ROLE.lock() { r.clear(); }
         return Ok(());
     }
 
@@ -596,14 +650,6 @@ fn ui(f: &mut Frame, app: &App) {
     let input_area = chunks[2];
 
     let mut spans = vec![Span::styled(app.input.clone(), Style::default().fg(C_YELLOW))];
-    if !app.popup_visible {
-        if let Some(hint) = &app.completion_hint {
-            if hint.len() > app.input.len() {
-                let tail = hint[app.input.len()..].to_owned();
-                spans.push(Span::styled(tail, Style::default().fg(C_DIM)));
-            }
-        }
-    }
     spans.push(Span::styled("█".to_owned(), Style::default().fg(C_ACCENT).add_modifier(Modifier::SLOW_BLINK)));
 
     let input_title = if app.popup_visible {
@@ -680,6 +726,7 @@ fn ui(f: &mut Frame, app: &App) {
             .style(Style::default().bg(C_SURFACE));
 
         let popup_list = List::new(popup_items).block(popup_block);
+        f.render_widget(ratatui::widgets::Clear, popup_area);
         f.render_widget(popup_list, popup_area);
     }
 
@@ -790,12 +837,12 @@ where
                         app.popup_candidates.clear();
                         app.popup_selected = 0;
                         app.autocomplete.reset();
-                        app.completion_hint = None;
+
                         continue;
                     }
 
                     app.autocomplete.reset();
-                    app.completion_hint = None;
+
 
                     let msg = app.input.trim().to_string();
                     app.input.clear();
@@ -850,7 +897,7 @@ where
                         app.popup_candidates.clear();
                         app.popup_selected = 0;
                         app.autocomplete.reset();
-                        app.completion_hint = None;
+
                     } else {
                         app.refresh_member_names();
                         let members = app.member_names.clone();
@@ -868,7 +915,7 @@ where
                 KeyCode::Backspace => {
                     app.input.pop();
                     app.autocomplete.reset();
-                    app.completion_hint = None;
+
                     app.popup_visible = false;
                     app.popup_candidates.clear();
                     app.popup_selected = 0;
@@ -891,11 +938,7 @@ where
                     app.popup_visible = false;
                     app.popup_candidates.clear();
                     app.popup_selected = 0;
-                    let current = app.input.clone();
-                    let members = app.member_names.clone();
-                    let mut probe = Autocomplete::new();
-                    probe.populate(&current, &members);
-                    app.completion_hint = probe.candidates.first().map(|s| s.clone());
+
                     app.autocomplete.reset();
                 }
 
@@ -919,7 +962,7 @@ where
                         };
                         app.history_pos = Some(new_pos);
                         app.input = app.input_history[new_pos].clone();
-                        app.completion_hint = None;
+
                     } else {
                         app.scroll_offset = app.scroll_offset.saturating_add(1);
                     }
@@ -936,7 +979,7 @@ where
                             app.history_pos = None;
                             app.input = app.input_draft.clone();
                         }
-                        app.completion_hint = None;
+
                     } else {
                         app.scroll_offset = app.scroll_offset.saturating_sub(1);
                     }

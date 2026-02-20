@@ -98,22 +98,41 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
 
 pub fn encrypt(msg: &str, recipient_pubkey: &str) -> Result<String, Box<dyn std::error::Error>> {
     let der = general_purpose::STANDARD.decode(recipient_pubkey)?;
-    
     let pub_key = RsaPublicKey::from_public_key_der(&der)?;
 
-    let ciphertext = pub_key.encrypt(&mut OsRng, Oaep::new::<Sha256>(), msg.as_bytes())?;
+    // 1024-bit RSA with OAEP-SHA256: max plaintext = 128 - 2*32 - 2 = 62 bytes
+    const MAX_CHUNK: usize = 62;
 
-    Ok(general_purpose::STANDARD.encode(ciphertext))
+    let msg_bytes = msg.as_bytes();
+    let mut chunks = Vec::new();
+    let mut start = 0;
+
+    while start < msg_bytes.len() {
+        let mut end = (start + MAX_CHUNK).min(msg_bytes.len());
+        // Don't split in the middle of a multi-byte UTF-8 character
+        while end > start && end < msg_bytes.len() && (msg_bytes[end] & 0b1100_0000) == 0b1000_0000 {
+            end -= 1;
+        }
+        let chunk = &msg_bytes[start..end];
+        let ciphertext = pub_key.encrypt(&mut OsRng, Oaep::new::<Sha256>(), chunk)?;
+        chunks.push(general_purpose::STANDARD.encode(ciphertext));
+        start = end;
+    }
+
+    Ok(chunks.join("."))
 }
 
 pub fn decrypt(msg: &str) -> Result<String, Box<dyn std::error::Error>> {
     let priv_key = MY_PRIVKEY.get().expect("Private key not initialized");
 
-    let cipherbytes = general_purpose::STANDARD.decode(msg)?;
+    let mut plaintext = Vec::new();
+    for chunk_b64 in msg.split('.') {
+        let cipherbytes = general_purpose::STANDARD.decode(chunk_b64)?;
+        let decrypted = priv_key.decrypt(Oaep::new::<Sha256>(), &cipherbytes)?;
+        plaintext.extend_from_slice(&decrypted);
+    }
 
-    let plaintext_bytes = priv_key.decrypt(Oaep::new::<Sha256>(), &cipherbytes)?;
-
-    Ok(String::from_utf8(plaintext_bytes)?)
+    Ok(String::from_utf8(plaintext)?)
 }
 
 pub fn broadcast_message(stream: &mut TcpStream, members: &HashMap<String, String>, msg: &str) -> io::Result<()> {

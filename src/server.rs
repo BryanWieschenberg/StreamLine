@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{BufReader, BufRead, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
@@ -139,7 +139,8 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
         addr: peer,
         state: ClientState::Guest,
         ignore_list: Vec::new(),
-        pubkey: String::new()
+        pubkey: String::new(),
+        login_attempts: VecDeque::new(),
     }));
 
     {

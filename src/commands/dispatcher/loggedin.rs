@@ -799,6 +799,12 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
             };
 
             writeln!(client.stream, "{}", format!("/ROOM_STATE"))?;
+
+            let user_role = room.users.get(username)
+                .map(|u| u.role.as_str())
+                .unwrap_or("user");
+            writeln!(client.stream, "/ROLE {}", user_role)?;
+
             writeln!(client.stream, "{}", format!("Joined room: {}", name).green())?;
             Ok(CommandResult::Handled)
         }

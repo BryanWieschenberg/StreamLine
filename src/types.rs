@@ -24,7 +24,8 @@ pub struct Client {
     pub addr: SocketAddr,
     pub state: ClientState,
     pub ignore_list: Vec<String>,
-    pub pubkey: String
+    pub pubkey: String,
+    pub login_attempts: VecDeque<Instant>,
 }
 
 pub type Clients = Arc<Mutex<HashMap<SocketAddr, Arc<Mutex<Client>>>>>;
