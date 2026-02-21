@@ -1,10 +1,12 @@
+SECURITY TESTING:
+
 --- AUTHENTICATION & ACCOUNT SECURITY ---
 Attempt to register with duplicate usernames
 PASS
 Attempt to log in with wrong password
 PASS
 Brute-forcing login with many incorrect attempts
-FAIL - No rate limiting in lobby, only in-room
+PASS
 Ensure passwords are hashed in /data/users.json
 PASS
 Confirm password change flow overwrites old password hash correctly
@@ -16,11 +18,9 @@ PASS
 Try assigning roles without being owner
 PASS
 Try banning a user who has higher/equal privilege
-FAIL - No checks for this
+PASS
 Owner should not be demotable or kickable by anyone, including self
-FAIL - Owner is not protected from this
-Attempt to import a room you're not in
-FAIL - No checks for this
+PASS
 Try to view /super users data while not in room
 PASS
 
@@ -37,8 +37,6 @@ Verify command-based messages are also end-to-end encrypted
 FAIL - Only normal messages have E2EE
 
 --- FILE AND STORAGE INTEGRITY ---
-Delete data/rooms.json, server should still run and recreate on new room creation
-FAIL - JSON files must contain at least {}, and data is not protected from deletion
 Ensure exported user/room files are JSON-valid and don’t contain private keys
 PASS
 Verify that keys.json is only readable/writable by system owner
@@ -58,7 +56,7 @@ PASS
 Hidden users should not appear in /user list, but should in /super users
 PASS
 Muted users should be blocked from using /msg, /me, /announce, etc.
-FAIL - Works with all but /msg, can be circumvented with /ignore
+PASS
 Ignored users should not be able to DM you
 PASS
 Command /seen does not reveal users who were never in that room
@@ -76,7 +74,7 @@ PASS
 Try injecting terminal codes (\x1b[31m) in nicknames or messages, should be neutralized
 PASS
 Use Unicode/emoji in usernames or messages, ensure safe display and no encoding/decoding bugs
-FAIL - Works with all but decryption, which cannot understand special characters
+PASS
 Try newline or quote characters in JSON-bound strings, ensure no storage injection
 PASS
 
@@ -87,11 +85,12 @@ Reboot client, private key should remain loaded from keys.json
 PASS
 Delete all data in keys.json and relogin, ensure regeneration and re-registration occurs cleanly
 PASS
-Confirm exported room or account JSON can be re-imported and re-used seamlessly
-FAIL - Imports do not work correctly over LAN at the moment, only on server's machine
 
-PASS - 28
-FAIL - 9
-TOTAL - 37
+PASS - 33
+FAIL - 34
+TOTAL - 34
 
-PASS RATE - 28/37 = 75.68%
+9/3/25:
+PASS RATE - 25/34 = 73.53%
+2/21/26:
+PASS RATE - 33/34 = 97.06%

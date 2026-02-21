@@ -100,7 +100,6 @@ pub fn encrypt(msg: &str, recipient_pubkey: &str) -> Result<String, Box<dyn std:
     let der = general_purpose::STANDARD.decode(recipient_pubkey)?;
     let pub_key = RsaPublicKey::from_public_key_der(&der)?;
 
-    // 1024-bit RSA with OAEP-SHA256: max plaintext = 128 - 2*32 - 2 = 62 bytes
     const MAX_CHUNK: usize = 62;
 
     let msg_bytes = msg.as_bytes();
@@ -109,7 +108,6 @@ pub fn encrypt(msg: &str, recipient_pubkey: &str) -> Result<String, Box<dyn std:
 
     while start < msg_bytes.len() {
         let mut end = (start + MAX_CHUNK).min(msg_bytes.len());
-        // Don't split in the middle of a multi-byte UTF-8 character
         while end > start && end < msg_bytes.len() && (msg_bytes[end] & 0b1100_0000) == 0b1000_0000 {
             end -= 1;
         }

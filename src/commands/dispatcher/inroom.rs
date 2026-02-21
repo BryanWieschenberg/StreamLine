@@ -15,6 +15,15 @@ use crate::types::{Client, ClientState, Clients, PublicKeys, RoomUser, Rooms};
 use crate::utils::{broadcast_message, check_mute, lock_client, lock_clients, lock_room, lock_rooms, lock_rooms_storage, lock_users_storage};
 use super::CommandResult;
 
+fn role_rank(role: &str) -> u8 {
+    match role {
+        "owner" => 4,
+        "admin" => 3,
+        "moderator" => 2,
+        _ => 1,
+    }
+}
+
 pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, room: &String, pubkeys: &PublicKeys) -> io::Result<CommandResult> {
     if !has_permission(&cmd, client.clone(), rooms, username, room)? {
         return Ok(CommandResult::Handled);
@@ -354,6 +363,12 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         }
 
         Command::DM { recipient, message } => {
+            if let Some(msg) = check_mute(rooms, room, username)? {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", msg.red())?;
+                return Ok(CommandResult::Handled);
+            }
+
             let rooms_map = lock_rooms(rooms)?;
             let room_arc = match rooms_map.get(room) {
                 Some(r) => Arc::clone(r),
@@ -1253,6 +1268,9 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                         mute_length: 0,
                         mute_reason: "".to_string()
                     });
+                    if entry.role == "owner" && target_role != "owner" {
+                        continue;
+                    }
                     if entry.role != target_role {
                         entry.role = target_role.to_string();
                         assigned.push(u.to_string());
@@ -1271,6 +1289,24 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                     let mut client = lock_client(&client)?;
                     writeln!(client.stream, "{}", format!("Failed to save rooms: {e}").red())?;
                     return Ok(CommandResult::Handled);
+                }
+            }
+
+            if !assigned.is_empty() {
+                let clients_map = lock_clients(clients)?;
+                for assigned_user in &assigned {
+                    for c_arc in clients_map.values() {
+                        let mut c = match c_arc.lock() {
+                            Ok(g) => g,
+                            Err(_) => continue,
+                        };
+                        if let ClientState::InRoom { username: u, room: rnm, .. } = &c.state {
+                            if u == assigned_user && rnm == room {
+                                let _ = writeln!(c.stream, "/ROLE {}", target_role);
+                                break;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1665,7 +1701,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
-        Command::ModKick { username, reason } => {
+        Command::ModKick { username: username_target, reason } => {
             let room_arc = {
                 let rooms_map = lock_rooms(rooms)?;
                 match rooms_map.get(room) {
@@ -1679,17 +1715,28 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             };
 
             {
-                let mut rg = lock_room(&room_arc)?;
-                if !rg.online_users.contains(&username) {
+                let rg = lock_room(&room_arc)?;
+                let caller_role = rg.users.get(username).map(|u| u.role.as_str()).unwrap_or("user");
+                let target_role = rg.users.get(&username_target).map(|u| u.role.as_str()).unwrap_or("user");
+                if role_rank(caller_role) <= role_rank(target_role) {
                     let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", format!("{username} is not currently online").yellow())?;
+                    writeln!(client.stream, "{}", "Error: Cannot kick a user with equal or higher privilege".yellow())?;
                     return Ok(CommandResult::Handled);
                 }
-                rg.online_users.retain(|u| u != &username);
             }
 
-            if let Err(e) = unix_timestamp(rooms, room, &username) {
-                eprintln!("Failed to update last_seen for {username} in {room}: {e}");
+            {
+                let mut rg = lock_room(&room_arc)?;
+                if !rg.online_users.contains(&username_target) {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", format!("{username_target} is not currently online").yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+                rg.online_users.retain(|u| u != &username_target);
+            }
+
+            if let Err(e) = unix_timestamp(rooms, room, &username_target) {
+                eprintln!("Failed to update last_seen for {username_target} in {room}: {e}");
             }
 
             let clients_map = lock_clients(clients)?;
@@ -1704,7 +1751,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 };
 
                 if let ClientState::InRoom { username: u, room: rnm, .. } = &c.state {
-                    if u == &username && rnm == room {
+                    if u == &username_target && rnm == room {
                         let msg = if reason.trim().is_empty() {
                             format!("You have been kicked from {room}")
                         } else {
@@ -1712,7 +1759,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                         };
                         writeln!(c.stream, "{}", format!("/LOBBY_STATE"))?;
                         writeln!(c.stream, "{}", msg.red())?;
-                        c.state = ClientState::LoggedIn { username: username.clone() };
+                        c.state = ClientState::LoggedIn { username: username_target.clone() };
                         kicked = true;
                         break;
                     }
@@ -1732,18 +1779,18 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             let mut client = lock_client(&client)?;
             if kicked {
                 if reason.trim().is_empty() {
-                    writeln!(client.stream, "{}", format!("Kicked {username}").green())?;
+                    writeln!(client.stream, "{}", format!("Kicked {username_target}").green())?;
                 } else {
-                    writeln!(client.stream, "{}", format!("Kicked {username}: {reason}").green())?;
+                    writeln!(client.stream, "{}", format!("Kicked {username_target}: {reason}").green())?;
                 }
             } else {
-                writeln!(client.stream, "{}", format!("Failed to kick {username}").yellow())?;
+                writeln!(client.stream, "{}", format!("Failed to kick {username_target}").yellow())?;
             }
 
             Ok(CommandResult::Handled)
         }
 
-        Command::ModBan { username, duration, reason } => {
+        Command::ModBan { username: username_target, duration, reason } => {
             let room_arc = {
                 let rooms_map = lock_rooms(rooms)?;
                 match rooms_map.get(room) {
@@ -1755,6 +1802,17 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                     }
                 }
             };
+
+            {
+                let rg = lock_room(&room_arc)?;
+                let caller_role = rg.users.get(username).map(|u| u.role.as_str()).unwrap_or("user");
+                let target_role = rg.users.get(&username_target).map(|u| u.role.as_str()).unwrap_or("user");
+                if role_rank(caller_role) <= role_rank(target_role) {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Cannot ban a user with equal or higher privilege".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            }
 
             let ban_secs = match parse_duration(&duration) {
                 Ok(v) => v,
@@ -1773,7 +1831,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             {
                 let mut rg = lock_room(&room_arc)?;
 
-                let user_rec = rg.users.entry(username.clone()).or_insert(RoomUser {
+                let user_rec = rg.users.entry(username_target.clone()).or_insert(RoomUser {
                     nick: "".to_string(),
                     color: "".to_string(),
                     role: "user".to_string(),
@@ -1795,10 +1853,10 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 user_rec.ban_reason  = reason.clone();
                 user_rec.last_seen   = now;
 
-                rg.online_users.retain(|u| u != &username);
+                rg.online_users.retain(|u| u != &username_target);
             }
 
-            let _ = unix_timestamp(rooms, room, &username);
+            let _ = unix_timestamp(rooms, room, &username_target);
 
             let clients_map = lock_clients(clients)?;
             let human_len = if ban_secs == 0 {
@@ -1820,7 +1878,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                     Err(_) => continue,
                 };
                 if let ClientState::InRoom { username: u, room: rnm, .. } = &c.state {
-                    if u == &username && rnm == room {
+                    if u == &username_target && rnm == room {
                         let msg = if reason.trim().is_empty() {
                             format!("You have been banned from {room} ({human_len})")
                         } else {
@@ -1828,7 +1886,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                         };
                         writeln!(c.stream, "{}", format!("/LOBBY_STATE"))?;
                         writeln!(c.stream, "{}", msg.red())?;
-                        c.state = ClientState::LoggedIn { username: username.clone() };
+                        c.state = ClientState::LoggedIn { username: username_target.clone() };
                         break;
                     }
                 }
@@ -1852,9 +1910,9 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             };
 
             if reason.trim().is_empty() {
-                writeln!(client.stream, "{}", format!("Banned {username} ({len_disp})").green())?;
+                writeln!(client.stream, "{}", format!("Banned {username_target} ({len_disp})").green())?;
             } else {
-                writeln!(client.stream, "{}", format!("Banned {username} ({len_disp}): {reason}").green())?;
+                writeln!(client.stream, "{}", format!("Banned {username_target} ({len_disp}): {reason}").green())?;
             }
 
             Ok(CommandResult::Handled)
@@ -1908,7 +1966,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             Ok(CommandResult::Handled)
         }
 
-        Command::ModMute { username, duration, reason } => {
+        Command::ModMute { username: username_target, duration, reason } => {
             let room_arc = {
                 let rooms_map = lock_rooms(rooms)?;
                 match rooms_map.get(room) {
@@ -1920,6 +1978,17 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                     }
                 }
             };
+
+            {
+                let rg = lock_room(&room_arc)?;
+                let caller_role = rg.users.get(username).map(|u| u.role.as_str()).unwrap_or("user");
+                let target_role = rg.users.get(&username_target).map(|u| u.role.as_str()).unwrap_or("user");
+                if role_rank(caller_role) <= role_rank(target_role) {
+                    let mut client = lock_client(&client)?;
+                    writeln!(client.stream, "{}", "Error: Cannot mute a user with equal or higher privilege".yellow())?;
+                    return Ok(CommandResult::Handled);
+                }
+            }
 
             let mute_secs = match parse_duration(&duration) {
                 Ok(v) => v,
@@ -1937,7 +2006,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
 
             {
                 let mut rg = lock_room(&room_arc)?;
-                let rec = rg.users.entry(username.clone()).or_insert(RoomUser {
+                let rec = rg.users.entry(username_target.clone()).or_insert(RoomUser {
                     nick: "".into(),
                     color: "".into(),
                     role: "user".into(),
@@ -1960,7 +2029,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 rec.last_seen   = now;
             }
 
-            let _ = unix_timestamp(rooms, room, &username);
+            let _ = unix_timestamp(rooms, room, &username_target);
 
             let clients_map = lock_clients(clients)?;
             let human_len = if mute_secs == 0 {
@@ -1982,7 +2051,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                     Err(_) => continue,
                 };
                 if let ClientState::InRoom { username: u, room: rnm, .. } = &c.state {
-                    if u == &username && rnm == room {
+                    if u == &username_target && rnm == room {
                         let msg = if reason.trim().is_empty() {
                             format!("You have been muted in {room} ({human_len})")
                         } else {
@@ -2012,9 +2081,9 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             };
 
             if reason.trim().is_empty() {
-                writeln!(client.stream, "{}", format!("Muted {username} ({len_disp})").green())?;
+                writeln!(client.stream, "{}", format!("Muted {username_target} ({len_disp})").green())?;
             } else {
-                writeln!(client.stream, "{}", format!("Muted {username} ({len_disp}): {reason}").green())?;
+                writeln!(client.stream, "{}", format!("Muted {username_target} ({len_disp}): {reason}").green())?;
             }
 
             Ok(CommandResult::Handled)

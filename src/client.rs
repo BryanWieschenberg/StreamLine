@@ -56,18 +56,18 @@ fn get_room_members() -> HashMap<String, String> {
     members.clone()
 }
 
-const C_BG: Color = Color::Rgb(15, 15, 23);
-const C_SURFACE: Color = Color::Rgb(24, 24, 36);
-const C_BORDER: Color = Color::Rgb(60, 60, 90);
-const C_BORDER_ACTIVE: Color = Color::Rgb(120, 100, 220);
-const C_TEXT: Color = Color::White;
+const C_BG: Color = Color::Rgb(18, 18, 18);
+const C_SURFACE: Color = Color::Rgb(28, 28, 28);
+const C_BORDER: Color = Color::Rgb(60, 60, 60);
+const C_BORDER_ACTIVE: Color = Color::Rgb(160, 160, 160);
+const C_TEXT: Color = Color::Rgb(240, 240, 240);
 const C_DIM: Color = Color::DarkGray;
-const C_ACCENT: Color = Color::Magenta;
-const C_ACCENT2: Color = Color::Cyan;
-const C_YELLOW: Color = Color::Yellow;
+const C_ACCENT: Color = Color::Rgb(200, 200, 200);
+const C_ACCENT2: Color = Color::Rgb(150, 150, 150);
+const C_YELLOW: Color = Color::Rgb(220, 220, 220);
 const C_RED: Color = Color::Red;
-const C_GREEN: Color = Color::Green;
-const C_SYSTEM: Color = Color::Blue;
+const C_GREEN: Color = Color::Rgb(120, 160, 120);
+const C_SYSTEM: Color = Color::DarkGray;
 
 const COMMANDS_ALWAYS: &[&str] = &[
     "/help",
@@ -239,6 +239,10 @@ fn classify_line(s: &str) -> LineKind {
 }
 
 fn styled_line(s: &str) -> Line<'static> {
+    if s.contains('\x1b') {
+        return parse_ansi(s);
+    }
+
     match classify_line(s) {
         LineKind::System  => Line::from(Span::styled(s.to_owned(), Style::default().fg(C_SYSTEM))),
         LineKind::Error   => Line::from(Span::styled(s.to_owned(), Style::default().fg(C_RED))),
@@ -356,18 +360,6 @@ impl Autocomplete {
                 }
             }
         }
-    }
-
-    fn next(&mut self, input: &str, members: &[String]) -> Option<String> {
-        if self.candidates.is_empty() || self.prefix != input {
-            self.populate(input, members);
-        }
-        if self.candidates.is_empty() {
-            return None;
-        }
-        let idx = self.index.map(|i| (i + 1) % self.candidates.len()).unwrap_or(0);
-        self.index = Some(idx);
-        Some(self.candidates[idx].clone())
     }
 
     fn reset(&mut self) {
@@ -523,24 +515,93 @@ fn handle_control_packets(stream: &mut TcpStream, msg: &str, tx: &Sender<AppMess
     Ok(())
 }
 
-fn strip_ansi(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
+fn parse_ansi(s: &str) -> Line<'static> {
+    let mut spans = Vec::new();
+    let mut current_text = String::new();
+    let mut current_style = Style::default();
+
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '\x1b' {
             if chars.peek() == Some(&'[') {
                 chars.next();
+                let mut sequence = String::new();
                 for ch in chars.by_ref() {
-                    if ch.is_ascii_alphabetic() { break; }
+                    sequence.push(ch);
+                    if ch.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+                
+                if sequence.ends_with('m') {
+                    if !current_text.is_empty() {
+                        spans.push(Span::styled(current_text.clone(), current_style));
+                        current_text.clear();
+                    }
+                    
+                    let code_str = &sequence[..sequence.len()-1];
+                    let codes: Vec<&str> = code_str.split(';').collect();
+                    let mut i = 0;
+                    while i < codes.len() {
+                        if let Ok(c) = codes[i].parse::<u32>() {
+                            match c {
+                                0 => current_style = Style::default(),
+                                1 => current_style = current_style.add_modifier(Modifier::BOLD),
+                                3 => current_style = current_style.add_modifier(Modifier::ITALIC),
+                                4 => current_style = current_style.add_modifier(Modifier::UNDERLINED),
+                                30..=37 => {
+                                    let colors = [Color::Black, Color::Red, Color::Green, Color::Yellow, Color::Blue, Color::Magenta, Color::Cyan, Color::DarkGray];
+                                    current_style = current_style.fg(colors[(c - 30) as usize]);
+                                }
+                                90..=97 => {
+                                    let colors = [Color::DarkGray, Color::LightRed, Color::LightGreen, Color::LightYellow, Color::LightBlue, Color::LightMagenta, Color::LightCyan, Color::White];
+                                    current_style = current_style.fg(colors[(c - 90) as usize]);
+                                }
+                                38 => {
+                                    if i + 2 < codes.len() && codes[i+1] == "5" {
+                                        if let Ok(n) = codes[i+2].parse::<u8>() {
+                                            current_style = current_style.fg(Color::Indexed(n));
+                                        }
+                                        i += 2;
+                                    } else if i + 4 < codes.len() && codes[i+1] == "2" {
+                                        if let (Ok(r), Ok(g), Ok(b)) = (codes[i+2].parse::<u8>(), codes[i+3].parse::<u8>(), codes[i+4].parse::<u8>()) {
+                                            current_style = current_style.fg(Color::Rgb(r, g, b));
+                                        }
+                                        i += 4;
+                                    }
+                                }
+                                48 => {
+                                    if i + 2 < codes.len() && codes[i+1] == "5" {
+                                        if let Ok(n) = codes[i+2].parse::<u8>() {
+                                            current_style = current_style.bg(Color::Indexed(n));
+                                        }
+                                        i += 2;
+                                    } else if i + 4 < codes.len() && codes[i+1] == "2" {
+                                        if let (Ok(r), Ok(g), Ok(b)) = (codes[i+2].parse::<u8>(), codes[i+3].parse::<u8>(), codes[i+4].parse::<u8>()) {
+                                            current_style = current_style.bg(Color::Rgb(r, g, b));
+                                        }
+                                        i += 4;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        i += 1;
+                    }
                 }
             } else {
                 chars.next();
             }
         } else {
-            out.push(c);
+            current_text.push(c);
         }
     }
-    out
+    
+    if !current_text.is_empty() {
+        spans.push(Span::styled(current_text, current_style));
+    }
+    
+    Line::from(spans)
 }
 
 fn handle_recv(stream: TcpStream, tx: Sender<AppMessage>) -> std::io::Result<()> {
@@ -606,8 +667,7 @@ fn ui(f: &mut Frame, app: &App) {
     let title = Paragraph::new(
         Line::from(vec![
             Span::styled("  ◈ ", Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("StreamLine", Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)),
-            Span::styled("  —  secure encrypted chat", Style::default().fg(C_DIM)),
+            Span::styled("StreamLine", Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD))
         ])
     )
     .style(Style::default().bg(C_SURFACE))
@@ -807,7 +867,6 @@ where
                 AppMessage::NetworkError(s) => format!("⚠ {}", s),
                 AppMessage::ControlResult(s) => s,
             };
-            let text = if text.contains('\x1b') { strip_ansi(&text) } else { text };
             let was_at_bottom = app.scroll_offset == 0;
             app.push(text);
             app.refresh_member_names();
@@ -823,7 +882,23 @@ where
             continue;
         }
 
-        if let Event::Key(key) = event::read()? {
+        let ev = event::read()?;
+
+        if let Event::Mouse(me) = ev {
+            use crossterm::event::MouseEventKind;
+            match me.kind {
+                MouseEventKind::ScrollUp => {
+                    app.scroll_offset = app.scroll_offset.saturating_add(1);
+                }
+                MouseEventKind::ScrollDown => {
+                    app.scroll_offset = app.scroll_offset.saturating_sub(1);
+                }
+                _ => {}
+            }
+            continue;
+        }
+
+        if let Event::Key(key) = ev {
             use crossterm::event::KeyEventKind;
             if key.kind == KeyEventKind::Release || key.kind == KeyEventKind::Repeat {
                 continue;
@@ -879,7 +954,7 @@ where
                     if let Ok(state) = MY_STATE.lock() {
                         if let ClientState::InRoom = &*state {
                             let mut stream_clone = stream.try_clone()?;
-                            stream.write_all(b"/members? normal\n")?;
+                            stream.write_all(b"/members? full\n")?;
                             let members = get_room_members();
                             if !members.is_empty() {
                                 let _ = broadcast_message(&mut stream_clone, &members, &msg);
@@ -949,7 +1024,7 @@ where
                         } else {
                             app.popup_selected - 1
                         };
-                    } else if !app.input.is_empty() || app.history_pos.is_some() {
+                    } else {
                         let hist_len = app.input_history.len();
                         if hist_len == 0 { continue; }
                         let new_pos = match app.history_pos {
@@ -962,9 +1037,6 @@ where
                         };
                         app.history_pos = Some(new_pos);
                         app.input = app.input_history[new_pos].clone();
-
-                    } else {
-                        app.scroll_offset = app.scroll_offset.saturating_add(1);
                     }
                 }
                 KeyCode::Down => {
@@ -979,9 +1051,6 @@ where
                             app.history_pos = None;
                             app.input = app.input_draft.clone();
                         }
-
-                    } else {
-                        app.scroll_offset = app.scroll_offset.saturating_sub(1);
                     }
                 }
                 KeyCode::PageUp => {
