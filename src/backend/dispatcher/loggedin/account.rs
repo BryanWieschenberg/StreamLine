@@ -192,7 +192,7 @@ pub fn handle_account_export(client: Arc<Mutex<Client>>, username: &String, file
     Ok(CommandResult::Handled)
 }
 
-pub fn handle_account_delete(client: Arc<Mutex<Client>>, username: &String, force: bool) -> io::Result<CommandResult> {
+pub fn handle_account_delete(client: Arc<Mutex<Client>>, username: &String, pubkeys: &PublicKeys, force: bool) -> io::Result<CommandResult> {
     if !force {
         let mut c = lock_client(&client)?;
         use std::io::Write;
@@ -240,8 +240,18 @@ pub fn handle_account_delete(client: Arc<Mutex<Client>>, username: &String, forc
 
     save_json("data/users.json", &users)?;
 
-    let clone = Arc::clone(&client);
-    send_success(&clone, &format!("Account {username} deleted successfully, you are now a guest"))?;
+    {
+        let mut pubkeys_map = match pubkeys.lock() {
+            Ok(g) => g,
+            Err(_) => return Ok(CommandResult::Handled),
+        };
+        pubkeys_map.remove(username);
+    }
+
+    let mut c = lock_client(&client)?;
+    c.state = ClientState::Guest;
+    send_message_locked(&mut c, "/GUEST_STATE")?;
+    send_success_locked(&mut c, &format!("Account {username} deleted successfully, you are now a guest"))?;
 
     Ok(CommandResult::Handled)
 }

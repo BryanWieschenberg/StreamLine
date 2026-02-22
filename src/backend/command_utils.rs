@@ -42,7 +42,7 @@ pub static RESTRICTED_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     HashSet::from([
         "afk", "msg", "me", "seen", "announce",
         "super", "super.users", "super.rename", "super.export", 
-        "super.whitelist", "super.whitelist.info", "super.whitelist.add", "super.whitelist.remove",
+        "super.whitelist", "super.whitelist.info", "super.whitelist.toggle", "super.whitelist.add", "super.whitelist.remove",
         "super.limit", "super.limit.info", "super.limit.rate", "super.limit.session",
         "super.roles", "super.roles.list", "super.roles.add", "super.roles.revoke", "super.roles.assign", "super.roles.recolor",
         "user", "user.list", "user.rename", "user.recolor", "user.hide",
@@ -55,7 +55,7 @@ pub fn command_order() -> Vec<&'static str> {
         "help", "clear", "ping", "quit", "leave", "status", "ignore",
         "afk", "msg", "me", "seen", "announce",
         "super", "super.users", "super.rename", "super.export", 
-        "super.whitelist", "super.whitelist.info", "super.whitelist.add", "super.whitelist.remove",
+        "super.whitelist", "super.whitelist.info", "super.whitelist.toggle", "super.whitelist.add", "super.whitelist.remove",
         "super.limit", "super.limit.info", "super.limit.rate", "super.limit.session",
         "super.roles", "super.roles.list", "super.roles.add", "super.roles.revoke", "super.roles.assign", "super.roles.recolor",
         "user", "user.list", "user.rename", "user.recolor", "user.hide",

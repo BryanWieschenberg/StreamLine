@@ -87,7 +87,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
         Command::AccountEditPassword { current_password, new_password } => account::handle_account_edit_password(client, username, &current_password, &new_password),
         Command::AccountImport { filename } => account::handle_account_import(client, &filename),
         Command::AccountExport { filename } => account::handle_account_export(client, username, &filename),
-        Command::AccountDelete { force } => account::handle_account_delete(client, username, force),
+        Command::AccountDelete { force } => account::handle_account_delete(client, username, pubkeys, force),
         Command::Account => account::handle_account(client, username),
 
         Command::RoomList => rooms::handle_room_list(client, rooms, username),
