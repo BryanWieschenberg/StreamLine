@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::shared::types::{Client, ClientState, PublicKeys};
-use crate::shared::utils::{lock_client, lock_users_storage, load_json, save_json, send_message, send_error, send_success};
+use crate::shared::utils::{lock_client, lock_users_storage, load_json, save_json, send_error, send_success, send_error_locked, send_message_locked, send_success_locked};
 use crate::backend::dispatcher::CommandResult;
 use crate::backend::command_utils::generate_hash;
 
@@ -23,13 +23,21 @@ pub fn handle_account_logout(client: Arc<Mutex<Client>>, username: &String, pubk
     
     let mut c = lock_client(&client)?;
     c.state = ClientState::Guest;
-    send_success(&client, &format!("Logged out: {username}"))?;
+    let _ = crate::shared::utils::send_message_locked(&mut c, "/GUEST_STATE");
+    let _ = crate::shared::utils::send_success_locked(&mut c, &format!("Logged out: {username}"));
     
     Ok(CommandResult::Handled)
 }
 
 pub fn handle_account_edit_username(client: Arc<Mutex<Client>>, username: &String, new_username: &String) -> io::Result<CommandResult> {
-    let mut c = lock_client(&client)?;
+    {
+        let mut c = lock_client(&client)?;
+        if new_username.is_empty() {
+             send_error_locked(&mut c, "Username cannot be empty")?;
+             return Ok(CommandResult::Handled);
+        }
+    }
+    
     let _lock = lock_users_storage()?;
 
     let mut users = load_json("data/users.json")?;
@@ -52,10 +60,11 @@ pub fn handle_account_edit_username(client: Arc<Mutex<Client>>, username: &Strin
     save_json("data/users.json", &users)?;
 
     let old_username = username.clone();
+    let mut c = lock_client(&client)?;
     c.state = ClientState::LoggedIn { username: new_username.clone() };
 
-    send_message(&client, "/GUEST_STATE")?;
-    send_success(&client, &format!("Username changed from {old_username} to: {new_username}"))?;
+    send_message_locked(&mut c, "/GUEST_STATE")?;
+    send_success_locked(&mut c, &format!("Username changed from {old_username} to: {new_username}"))?;
     Ok(CommandResult::Handled)
 }
 

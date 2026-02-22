@@ -16,6 +16,7 @@ pub static MY_STATE: Lazy<Mutex<ClientState>> = Lazy::new(|| Mutex::new(ClientSt
 pub static CURRENT_USER: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
 pub static CURRENT_ROOM: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
 pub static MY_ROLE: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
+pub static ALLOWED_COMMANDS: Lazy<Mutex<Vec<String>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 pub fn get_room_members() -> HashMap<String, String> {
     let (lock, _) = &*MEMBERS;
@@ -36,7 +37,6 @@ pub const COMMANDS_ALWAYS: &[&str] = &[
 ];
 
 pub const COMMANDS_GUEST: &[&str] = &[
-    "/account",
     "/account register",
     "/account login",
     "/account import",
@@ -49,64 +49,23 @@ pub const COMMANDS_LOGGEDIN: &[&str] = &[
     "/account edit password",
     "/account export",
     "/account delete",
-    "/account delete force",
-    "/room",
     "/room list",
     "/room join",
     "/room create",
     "/room import",
     "/room delete",
-    "/room delete force",
+];
+
+pub const COMMANDS_IGNORE: &[&str] = &[
     "/ignore",
     "/ignore list",
     "/ignore add",
     "/ignore remove",
 ];
 
-pub const COMMANDS_INROOM: &[&str] = &[
+pub const COMMANDS_INROOM_BASE: &[&str] = &[
     "/leave",
     "/status",
-    "/afk",
-    "/msg",
-    "/me",
-    "/seen",
-    "/announce",
-    "/user",
-    "/user list",
-    "/user rename",
-    "/user recolor",
-    "/user hide",
-];
-
-pub const COMMANDS_MOD: &[&str] = &[
-    "/mod",
-    "/mod kick",
-    "/mod ban",
-    "/mod unban",
-    "/mod mute",
-    "/mod unmute",
-    "/mod info",
-];
-
-pub const COMMANDS_SUPER: &[&str] = &[
-    "/super",
-    "/super users",
-    "/super rename",
-    "/super export",
-    "/super whitelist",
-    "/super whitelist info",
-    "/super whitelist add",
-    "/super whitelist remove",
-    "/super limit",
-    "/super limit info",
-    "/super limit rate",
-    "/super limit session",
-    "/super roles",
-    "/super roles list",
-    "/super roles add",
-    "/super roles revoke",
-    "/super roles assign",
-    "/super roles recolor",
 ];
 
 pub enum AppMessage {
@@ -133,8 +92,6 @@ impl Autocomplete {
 
         if input.starts_with('/') {
             let state = MY_STATE.lock().ok();
-            let role = MY_ROLE.lock().ok();
-            let role_str = role.as_deref().map(|s| s.as_str()).unwrap_or("");
 
             let mut available: Vec<&str> = COMMANDS_ALWAYS.to_vec();
 
@@ -146,26 +103,36 @@ impl Autocomplete {
                     available.extend(COMMANDS_LOGGEDIN.iter().copied());
                 }
                 Some(ClientState::InRoom) => {
-                    available.extend(COMMANDS_LOGGEDIN.iter().copied());
-                    available.extend(COMMANDS_INROOM.iter().copied());
-                    match role_str {
-                        "owner" | "admin" => {
-                            available.extend(COMMANDS_MOD.iter().copied());
-                            available.extend(COMMANDS_SUPER.iter().copied());
+                    available.extend(COMMANDS_IGNORE.iter().copied());
+                    available.extend(COMMANDS_INROOM_BASE.iter().copied());
+                    
+                    if let Ok(allowed) = ALLOWED_COMMANDS.lock() {
+                        for cmd in allowed.iter() {
+                            let full_cmd = if cmd.starts_with('/') {
+                                cmd.clone()
+                            } else {
+                                format!("/{}", cmd.replace('.', " "))
+                            };
+
+                            if full_cmd.starts_with(input) {
+                                if !self.candidates.contains(&full_cmd) {
+                                    self.candidates.push(full_cmd);
+                                }
+                            }
                         }
-                        "moderator" => {
-                            available.extend(COMMANDS_MOD.iter().copied());
-                        }
-                        _ => {}
                     }
                 }
             }
             for cmd in available {
                 if cmd.starts_with(input) {
-                    self.candidates.push(cmd.to_string());
+                    if !self.candidates.contains(&cmd.to_string()) {
+                        self.candidates.push(cmd.to_string());
+                    }
                 }
             }
         }
+
+        self.candidates.sort();
 
         if self.candidates.is_empty() {
              if let Some(at_pos) = input.rfind('@') {

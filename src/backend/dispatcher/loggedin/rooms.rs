@@ -8,7 +8,7 @@ use colored::*;
 
 use crate::shared::types::{Client, ClientState, Room, RoomUser, Rooms};
 use crate::shared::utils::{lock_client, lock_rooms, lock_room, lock_rooms_storage, send_success, send_error, send_message, load_json, save_json, send_error_locked, send_success_locked};
-use crate::backend::command_utils::sync_room_members;
+use crate::backend::command_utils::{sync_room_members, sync_user_commands};
 use crate::backend::dispatcher::CommandResult;
 use crate::shared::types::{Clients, PublicKeys};
 
@@ -299,6 +299,7 @@ pub fn handle_room_join(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &R
     send_success_locked(&mut c, &format!("Joined room: {name}"))?;
     drop(room);
     drop(c);
+    let _ = sync_user_commands(&client, rooms, username, name);
     let _ = sync_room_members(rooms, clients, pubkeys, name);
 
     Ok(CommandResult::Handled)

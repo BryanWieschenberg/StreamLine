@@ -32,16 +32,21 @@ pub static DESCRIPTIONS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
         ("mod.info",        "> /mod info         Show who is muted and banned"),
         ("mod.kick",        "> /mod kick         Kick users from the chat"),
         ("mod.mute",        "> /mod mute         Disable certain users from speaking"),
-        ("mod.ban",         "> /mod ban          Disable certain users from joining")
+        ("mod.unmute",      "> /mod unmute       Allow certain users to speak again"),
+        ("mod.ban",         "> /mod ban          Disable certain users from joining"),
+        ("mod.unban",       "> /mod unban        Allow certain users to join again")
     ])
 });
 
 pub static RESTRICTED_COMMANDS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     HashSet::from([
         "afk", "msg", "me", "seen", "announce",
-        "super", "super.users", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
+        "super", "super.users", "super.rename", "super.export", 
+        "super.whitelist", "super.whitelist.info", "super.whitelist.add", "super.whitelist.remove",
+        "super.limit", "super.limit.info", "super.limit.rate", "super.limit.session",
+        "super.roles", "super.roles.list", "super.roles.add", "super.roles.revoke", "super.roles.assign", "super.roles.recolor",
         "user", "user.list", "user.rename", "user.recolor", "user.hide",
-        "mod", "mod.info", "mod.kick", "mod.ban", "mod.mute",
+        "mod", "mod.info", "mod.kick", "mod.ban", "mod.unban", "mod.mute", "mod.unmute",
     ])
 });
 
@@ -49,9 +54,12 @@ pub fn command_order() -> Vec<&'static str> {
     vec![
         "help", "clear", "ping", "quit", "leave", "status", "ignore",
         "afk", "msg", "me", "seen", "announce",
-        "super", "super.users", "super.rename", "super.export", "super.whitelist", "super.limit", "super.roles",
+        "super", "super.users", "super.rename", "super.export", 
+        "super.whitelist", "super.whitelist.info", "super.whitelist.add", "super.whitelist.remove",
+        "super.limit", "super.limit.info", "super.limit.rate", "super.limit.session",
+        "super.roles", "super.roles.list", "super.roles.add", "super.roles.revoke", "super.roles.assign", "super.roles.recolor",
         "user", "user.list", "user.rename", "user.recolor", "user.hide",
-        "mod", "mod.info", "mod.kick", "mod.ban", "mod.mute"
+        "mod", "mod.info", "mod.kick", "mod.ban", "mod.unban", "mod.mute", "mod.unmute"
     ]
 }
 
@@ -135,8 +143,13 @@ pub fn check_role_permissions(role: &str, command: &str, roles: &Roles) -> bool 
         if cmds.iter().any(|c| c == command) {
             return true;
         }
-        if let Some(parent) = command.split('.').next() {
-            return cmds.iter().any(|c| c == parent);
+        
+        let parts: Vec<&str> = command.split('.').collect();
+        for i in 1..parts.len() {
+            let prefix = parts[0..i].join(".");
+            if cmds.iter().any(|c| *c == prefix) {
+                return true;
+            }
         }
         false
     }
@@ -157,17 +170,18 @@ pub fn has_permission(cmd: &Command, client_arc: Arc<Mutex<Client>>, rooms: &Roo
     }
 
     let role = {
-        let client = lock_client(&client_arc)?;
         let rooms_map = lock_rooms(rooms)?;
         let room_arc = match rooms_map.get(room) {
             Some(r) => Arc::clone(r),
             None => {
+                let client = lock_client(&client_arc)?;
                 writeln!(&client.stream, "{}", format!("Room {room} not found").yellow())?;
                 return Ok(false)
             }
         };
 
         let room_guard = lock_room(&room_arc)?;
+        let client = lock_client(&client_arc)?;
         match room_guard.users.get(username) {
             Some(u) => u.role.clone(),
             None => {
@@ -191,6 +205,81 @@ pub fn has_permission(cmd: &Command, client_arc: Arc<Mutex<Client>>, rooms: &Roo
 }
 
 
+
+pub fn sync_user_commands(client_arc: &Arc<Mutex<Client>>, rooms: &Rooms, username: &str, room_name: &str) -> io::Result<()> {
+    let extra_cmds = {
+        let rooms_map = lock_rooms(rooms)?;
+        let room_arc = match rooms_map.get(room_name) {
+            Some(arc) => arc,
+            None => return Ok(()),
+        };
+        let room_guard = lock_room(room_arc)?;
+        let role = match room_guard.users.get(username) {
+            Some(u) => u.role.as_str(),
+            None => "user",
+        };
+        let base_allowed = match role {
+            "moderator" => room_guard.roles.moderator.clone(),
+            "user" => room_guard.roles.user.clone(),
+            "admin" | "owner" => {
+                RESTRICTED_COMMANDS.iter().map(|s| s.to_string()).collect()
+            },
+            _ => Vec::new(),
+        };
+
+        if role == "admin" || role == "owner" {
+            base_allowed
+        } else {
+            let mut expanded = HashSet::new();
+            for cmd in base_allowed {
+                expanded.insert(cmd.clone());
+                let prefix = format!("{}.", cmd);
+                for restricted in RESTRICTED_COMMANDS.iter() {
+                    if restricted.starts_with(&prefix) {
+                        expanded.insert(restricted.to_string());
+                    }
+                }
+            }
+            expanded.into_iter().collect()
+        }
+    };
+
+    let mut extra_cmds = extra_cmds;
+    extra_cmds.sort();
+
+    let mut c = lock_client(client_arc)?;
+    if !extra_cmds.is_empty() {
+        writeln!(c.stream, "/CMDS {}", extra_cmds.join(" "))?;
+        let _ = c.stream.flush();
+    } else {
+        writeln!(c.stream, "/CMDS")?;
+        let _ = c.stream.flush();
+    }
+
+    Ok(())
+}
+
+pub fn sync_room_commands(rooms: &Rooms, clients: &Clients, room_name: &str) -> io::Result<()> {
+    let affected_clients = {
+        let clients_guard = lock_clients(clients)?;
+        let mut list = Vec::new();
+        for client_arc in clients_guard.values() {
+            if let Ok(target_c) = client_arc.try_lock() {
+                if let ClientState::InRoom { username, room, .. } = &target_c.state {
+                    if room == room_name {
+                        list.push((Arc::clone(client_arc), username.clone(), room.clone()));
+                    }
+                }
+            }
+        }
+        list
+    };
+
+    for (arc, u, r) in affected_clients {
+        sync_user_commands(&arc, rooms, &u, &r)?;
+    }
+    Ok(())
+}
 
 pub fn sync_room_members(rooms: &Rooms, clients: &Clients, pubkeys: &PublicKeys, room_name: &str) -> io::Result<()> {
     let (online_users, visibility, user_roles) = {
@@ -267,28 +356,16 @@ pub fn unix_timestamp(rooms: &Rooms, room_name: &str, username: &str) -> io::Res
         Err(_)  => 0,
     };
 
-    {
-        let rooms_map = lock_rooms(rooms)?;
-        if let Some(room_arc) = rooms_map.get(room_name) {
-            if let Ok(mut room_guard) = lock_room(room_arc) {
-                if let Some(entry) = room_guard.users.get_mut(username) {
-                    entry.last_seen = ts;
-                } else {
-                    return Ok(());
-                }
-            } else {
-                return Ok(());
+    let rooms_map = lock_rooms(rooms)?;
+    if let Some(room_arc) = rooms_map.get(room_name) {
+        if let Ok(mut room_guard) = room_arc.lock() {
+            if let Some(entry) = room_guard.users.get_mut(username) {
+                entry.last_seen = ts;
             }
-        } else {
-            return Ok(());
         }
     }
 
-    {
-        let rooms_map = lock_rooms(rooms)?;
-        save_rooms_to_disk(&rooms_map)?;
-    }
-
+    save_rooms_to_disk(&rooms_map)?;
     Ok(())
 }
 

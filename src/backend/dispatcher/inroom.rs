@@ -22,7 +22,6 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
     match cmd {
         Command::Help => {
             let role_cmds: Vec<String> = {
-                let _c = lock_client(&client)?;
                 let rooms_map = lock_rooms(rooms)?;
                 let room_arc = match rooms_map.get(room) {
                     Some(arc) => arc,
@@ -161,8 +160,8 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         Command::SuperLimitRate { limit } => superuser::handle_super_limit_rate(client, rooms, room, limit),
         Command::SuperLimitSession { limit } => superuser::handle_super_limit_session(client, rooms, room, limit),
         Command::SuperRoles => superuser_roles::handle_super_roles(client, rooms, room),
-        Command::SuperRolesAdd { role, commands } => superuser_roles::handle_super_roles_add(client, rooms, room, &role, &commands),
-        Command::SuperRolesRevoke { role, commands } => superuser_roles::handle_super_roles_revoke(client, rooms, room, &role, &commands),
+        Command::SuperRolesAdd { role, commands } => superuser_roles::handle_super_roles_add(client, clients, rooms, room, &role, &commands),
+        Command::SuperRolesRevoke { role, commands } => superuser_roles::handle_super_roles_revoke(client, clients, rooms, room, &role, &commands),
         Command::SuperRolesAssign { role, users } => superuser_roles::handle_super_roles_assign(client, clients, rooms, room, &role, &users),
         Command::SuperRolesRecolor { role, color } => superuser_roles::handle_super_roles_recolor(client, rooms, room, &role, &color),
         Command::Users => user::handle_users(client, rooms, room),

@@ -4,7 +4,7 @@ use std::sync::mpsc::Sender;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::frontend::app::{AppMessage, ClientState, MY_STATE, CURRENT_USER, CURRENT_ROOM, MY_ROLE, MEMBERS};
+use crate::frontend::app::{AppMessage, ClientState, MY_STATE, CURRENT_USER, CURRENT_ROOM, MY_ROLE, ALLOWED_COMMANDS, MEMBERS};
 use crate::shared::crypto::{generate_or_load_keys, decrypt};
 
 pub fn handle_control_packets(stream: &mut TcpStream, msg: &str, tx: &Sender<AppMessage>) -> std::io::Result<()> {
@@ -53,6 +53,7 @@ pub fn handle_control_packets(stream: &mut TcpStream, msg: &str, tx: &Sender<App
         *state = ClientState::LoggedIn;
         if let Ok(mut r) = CURRENT_ROOM.lock() { r.clear(); }
         if let Ok(mut r) = MY_ROLE.lock() { r.clear(); }
+        if let Ok(mut cmds) = ALLOWED_COMMANDS.lock() { cmds.clear(); }
         return Ok(());
     }
 
@@ -62,6 +63,21 @@ pub fn handle_control_packets(stream: &mut TcpStream, msg: &str, tx: &Sender<App
         if let Ok(mut u) = CURRENT_USER.lock() { u.clear(); }
         if let Ok(mut r) = CURRENT_ROOM.lock() { r.clear(); }
         if let Ok(mut r) = MY_ROLE.lock() { r.clear(); }
+        if let Ok(mut cmds) = ALLOWED_COMMANDS.lock() { cmds.clear(); }
+        return Ok(());
+    }
+
+    if let Some(cmds_str) = msg.strip_prefix("/CMDS ") {
+        if let Ok(mut cmds) = ALLOWED_COMMANDS.lock() {
+            *cmds = cmds_str.split_whitespace().map(String::from).collect();
+        }
+        return Ok(());
+    }
+
+    if msg == "/CMDS" {
+        if let Ok(mut cmds) = ALLOWED_COMMANDS.lock() {
+            cmds.clear();
+        }
         return Ok(());
     }
 

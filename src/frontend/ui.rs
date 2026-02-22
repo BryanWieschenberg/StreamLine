@@ -167,6 +167,54 @@ pub fn styled_line(s: &str) -> Line<'static> {
     }
 }
 
+pub fn wrap_line(line: Line<'static>, width: usize) -> Vec<Line<'static>> {
+    if width == 0 {
+        return vec![line];
+    }
+    let mut lines = Vec::new();
+    let mut current_spans = Vec::new();
+    let mut current_width = 0;
+
+    for span in line.spans {
+        let style = span.style;
+        let content = span.content;
+        let words = content.split_inclusive(' ');
+
+        for word in words {
+            let word_len = word.len();
+            if current_width + word_len <= width {
+                current_spans.push(Span::styled(word.to_string(), style));
+                current_width += word_len;
+            } else {
+                let mut remaining_word = word;
+                while !remaining_word.is_empty() {
+                    let space_left = width.saturating_sub(current_width);
+                    if space_left == 0 {
+                        lines.push(Line::from(std::mem::take(&mut current_spans)));
+                        current_width = 0;
+                        continue;
+                    }
+
+                    let split_at = remaining_word.len().min(space_left);
+                    let (head, tail) = remaining_word.split_at(split_at);
+                    current_spans.push(Span::styled(head.to_string(), style));
+                    current_width += head.len();
+                    remaining_word = tail;
+
+                    if current_width >= width {
+                        lines.push(Line::from(std::mem::take(&mut current_spans)));
+                        current_width = 0;
+                    }
+                }
+            }
+        }
+    }
+    if !current_spans.is_empty() {
+        lines.push(Line::from(current_spans));
+    }
+    lines
+}
+
 pub fn parse_ansi(s: &str) -> Line<'static> {
     let mut spans = Vec::new();
     let mut current_text = String::new();
@@ -256,7 +304,7 @@ pub fn parse_ansi(s: &str) -> Line<'static> {
     Line::from(spans)
 }
 
-pub fn ui(f: &mut Frame, app: &App) {
+pub fn ui(f: &mut Frame, app: &mut App) {
     let area = f.area();
 
     f.render_widget(
@@ -286,17 +334,27 @@ pub fn ui(f: &mut Frame, app: &App) {
 
     let msg_area = chunks[1];
     let inner_height = msg_area.height.saturating_sub(2) as usize;
+    let inner_width = msg_area.width.saturating_sub(2) as usize;
 
-    let total = app.messages.len();
-    let max_scroll = total.saturating_sub(inner_height);
-    let offset = app.scroll_offset.min(max_scroll);
+    let display_buffer = 300;
+    let start_idx = app.messages.len().saturating_sub(display_buffer);
+    
+    let mut all_lines = Vec::new();
+    for m in app.messages.iter().skip(start_idx) {
+        all_lines.extend(wrap_line(styled_line(m), inner_width));
+    }
+
+    let total_lines = all_lines.len();
+    let max_scroll = total_lines.saturating_sub(inner_height);
+    app.scroll_offset = app.scroll_offset.min(max_scroll);
+    let offset = app.scroll_offset;
+    
     let first = max_scroll.saturating_sub(offset);
-
-    let items: Vec<ListItem> = app.messages
-        .iter()
+    let visible_lines: Vec<ListItem> = all_lines
+        .into_iter()
         .skip(first)
         .take(inner_height)
-        .map(|m| ListItem::new(styled_line(m)))
+        .map(ListItem::new)
         .collect();
 
     let scroll_indicator = if offset > 0 {
@@ -312,7 +370,7 @@ pub fn ui(f: &mut Frame, app: &App) {
         .title(Span::styled(scroll_indicator, Style::default().fg(C_DIM)))
         .style(Style::default().bg(C_BG));
 
-    let msg_list = List::new(items)
+    let msg_list = List::new(visible_lines)
         .block(messages_block);
 
     f.render_widget(msg_list, msg_area);
@@ -372,14 +430,14 @@ pub fn ui(f: &mut Frame, app: &App) {
 
         let visible_count = win_end - win_start;
         let popup_height = visible_count as u16 + 2;
-        let popup_width = app.popup_candidates.iter().map(|c| c.len()).max().unwrap_or(10) as u16 + 4;
-        let popup_width = popup_width.min(input_area.width);
-
         let popup_title = if total > max_visible {
             format!(" Completions ({}/{}) ", app.popup_selected + 1, total)
         } else {
             " Completions ".to_string()
         };
+        let longest_cmd_len = app.popup_candidates.iter().map(|c| c.len()).max().unwrap_or(0) as u16;
+        let title_len = popup_title.len() as u16;
+        let popup_width = (title_len + 2).max(longest_cmd_len + 4).min(input_area.width);
 
         let popup_area = ratatui::layout::Rect {
             x: input_area.x,

@@ -41,20 +41,20 @@ impl ToString for Command {
             Command::SuperExport { .. } => "super.export",
             Command::SuperWhitelist => "super.whitelist",
             Command::SuperWhitelistToggle => "super.whitelist",
-            Command::SuperWhitelistAdd { .. } => "super.whitelist",
-            Command::SuperWhitelistRemove { .. } => "super.whitelist",
+            Command::SuperWhitelistAdd { .. } => "super.whitelist.add",
+            Command::SuperWhitelistRemove { .. } => "super.whitelist.remove",
             Command::SuperLimit => "super.limit",
-            Command::SuperLimitRate { .. } => "super.limit",
-            Command::SuperLimitSession { .. } => "super.limit",
+            Command::SuperLimitRate { .. } => "super.limit.rate",
+            Command::SuperLimitSession { .. } => "super.limit.session",
             Command::SuperRoles => "super.roles",
-            Command::SuperRolesAdd { .. } => "super.roles",
-            Command::SuperRolesRevoke { .. } => "super.roles",
-            Command::SuperRolesAssign { .. } => "super.roles",
-            Command::SuperRolesRecolor { .. } => "super.roles",
+            Command::SuperRolesAdd { .. } => "super.roles.add",
+            Command::SuperRolesRevoke { .. } => "super.roles.revoke",
+            Command::SuperRolesAssign { .. } => "super.roles.assign",
+            Command::SuperRolesRecolor { .. } => "super.roles.recolor",
             
             Command::Users => "user.list",
             Command::UsersRename { .. } => "user.rename",
-            Command::UsersRecolor { .. } => "user.color",
+            Command::UsersRecolor { .. } => "user.recolor",
             Command::UsersHide => "user.hide",
 
             Command::ModInfo => "mod.info",
@@ -566,7 +566,11 @@ pub fn parse_command(input: &str) -> Command {
         ["super", "whitelist", "i"] |
         ["super", "wl", "i"] |
         ["s", "whitelist", "i"] |
-        ["s", "wl", "i"] => Command::SuperWhitelist,
+        ["s", "wl", "i"] |
+        ["super", "whitelist"] |
+        ["super", "wl"] |
+        ["s", "whitelist"] |
+        ["s", "wl"] => Command::SuperWhitelist,
 
         ["super", "whitelist", "toggle"] |
         ["super", "wl", "toggle"] |
@@ -734,7 +738,11 @@ pub fn parse_command(input: &str) -> Command {
         ["super", "roles", "l"] |
         ["super", "r", "l"] |
         ["s", "roles", "l"] |
-        ["s", "r", "l"] => Command::SuperRoles,
+        ["s", "r", "l"] |
+        ["super", "roles"] |
+        ["super", "r"] |
+        ["s", "roles"] |
+        ["s", "r"] => Command::SuperRoles,
 
         ["super", "roles", "list", ..] |
         ["super", "r", "list", ..] |

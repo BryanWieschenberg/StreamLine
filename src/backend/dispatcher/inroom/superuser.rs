@@ -1,6 +1,5 @@
 use std::io::{self, BufReader, BufWriter, Write};
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 use serde_json::{json, Serializer};
 use serde::Serialize;
 use serde_json::ser::PrettyFormatter;
@@ -8,44 +7,39 @@ use std::fs::OpenOptions;
 use colored::*;
 
 use crate::shared::types::{Client, ClientState, Clients, Rooms};
-use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room, lock_rooms_storage, send_success, send_error, send_message, save_rooms_to_disk, ColorizeExt, send_message_locked, send_error_locked, send_success_locked};
+use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room, send_success, send_error, send_message, save_rooms_to_disk, ColorizeExt, send_message_locked, send_error_locked, send_success_locked};
 use crate::backend::dispatcher::CommandResult;
 
 pub fn handle_super_users(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, room: &String) -> io::Result<CommandResult> {
-    let mut c = lock_client(&client)?;
+    let mut status_map = std::collections::HashMap::new();
+    {
+        let clients_map = lock_clients(clients)?;
+        for c_arc in clients_map.values() {
+            if let Ok(target_c) = c_arc.try_lock() {
+                if let ClientState::InRoom { username, room: rnm, is_afk, room_time, .. } = &target_c.state {
+                    if rnm == room {
+                        let secs = room_time.and_then(|t| t.elapsed().ok()).map(|d| d.as_secs()).unwrap_or(0);
+                        status_map.insert(username.clone(), (*is_afk, secs));
+                    }
+                }
+            }
+        }
+    }
+
     let rooms_map = lock_rooms(rooms)?;
     let room_arc = match rooms_map.get(room) {
         Some(r) => Arc::clone(r),
         None => {
+            let mut c = lock_client(&client)?;
             send_message_locked(&mut c, &format!("Room {room} not found").yellow().to_string())?;
             return Ok(CommandResult::Handled);
         }
     };
     let room_guard = lock_room(&room_arc)?;
+    let mut c = lock_client(&client)?;
 
     writeln!(c.stream, "{}", format!("User data for {room}:").green())?;
     c.stream.flush()?;
-    drop(c);
-    
-    let clients_map = lock_clients(clients)?;
-
-    let mut status_map = std::collections::HashMap::new();
-    for c_arc in clients_map.values() {
-        if let Ok(target_c) = c_arc.try_lock() {
-            if let ClientState::InRoom { username, room: rnm, is_afk, room_time, .. } = &target_c.state {
-                if rnm == room {
-                    let secs = room_time.and_then(|t| t.elapsed().ok()).map(|d| d.as_secs()).unwrap_or(0);
-                    status_map.insert(username.clone(), (*is_afk, secs));
-                }
-            }
-        }
-    }
-    drop(clients_map);
-
-    let mut c = match lock_client(&client) {
-        Ok(guard) => guard,
-        Err(_) => return Ok(CommandResult::Handled),
-    };
 
     for (uname, udata) in &room_guard.users {
         if !room_guard.online_users.contains(uname) {
@@ -109,64 +103,48 @@ pub fn handle_super_users(client: Arc<Mutex<Client>>, clients: &Clients, rooms: 
 }
 
 pub fn handle_super_rename(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, room: &String, new_name: &String) -> io::Result<CommandResult> {
-    let mut rooms_map = {
-        let _c = lock_client(&client)?;
-        lock_rooms(rooms)?
-    };
     let old_name = room.clone();
 
-    if rooms_map.contains_key(new_name) {
-        send_message(&client, &format!("Room name '{new_name}' is already taken").yellow().to_string())?;
-        return Ok(CommandResult::Handled);
-    }
+    {
+        let clients_map = lock_clients(clients)?;
+        let mut rooms_map = lock_rooms(rooms)?;
 
-    let room_arc = match rooms_map.remove(&old_name) {
-        Some(r) => r,
-        None => {
-            send_message(&client, &format!("Room '{old_name}' not found").yellow().to_string())?;
+        if rooms_map.contains_key(new_name) {
+            let mut c = lock_client(&client)?;
+            send_message_locked(&mut c, &format!("Room name '{new_name}' is already taken").yellow().to_string())?;
             return Ok(CommandResult::Handled);
         }
-    };
 
-    rooms_map.insert(new_name.clone(), Arc::clone(&room_arc));
-
-    let clients_map = lock_clients(clients)?;
-    for client_arc in clients_map.values() {
-        let mut c = lock_client(client_arc)?;
-        if let ClientState::InRoom { room: r, .. } = &mut c.state {
-            if r == &old_name {
-                *r = new_name.clone();
+        let room_arc = match rooms_map.remove(&old_name) {
+            Some(r) => r,
+            None => {
+                let mut c = lock_client(&client)?;
+                send_message_locked(&mut c, &format!("Room '{old_name}' not found").yellow().to_string())?;
+                return Ok(CommandResult::Handled);
             }
-        }
-    }
+        };
 
-    let _room_save_lock = lock_rooms_storage()?;
-    let serializable_map: HashMap<_, _> = rooms_map.iter()
-        .filter_map(|(k, v)| {
-            match lock_room(v) {
-                Ok(guard) => Some((k.clone(), guard.clone())),
-                Err(e) => {
-                    eprintln!("Failed to lock room '{k}': {e}");
-                    None
+        rooms_map.insert(new_name.clone(), Arc::clone(&room_arc));
+
+        for c_arc in clients_map.values() {
+            if let Ok(mut target_c) = c_arc.try_lock() {
+                if let ClientState::InRoom { room: r, .. } = &mut target_c.state {
+                    if r == &old_name {
+                        *r = new_name.clone();
+                    }
                 }
             }
-        })
-        .collect();
+        }
 
-    let serialized = match serde_json::to_string_pretty(&serializable_map) {
-        Ok(json) => json,
-        Err(e) => {
-            send_error(&client, &format!("Failed to serialize rooms: {e}"))?;
+        if let Err(e) = save_rooms_to_disk(&rooms_map) {
+            let mut c = lock_client(&client)?;
+            send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
             return Ok(CommandResult::Handled);
         }
-    };
-
-    if let Err(e) = std::fs::write("data/rooms.json", serialized) {
-        send_error(&client, &format!("Failed to write to disk: {e}"))?;
-        return Ok(CommandResult::Handled);
     }
 
-    send_success(&client, &format!("Room renamed from '{old_name}' to '{new_name}'"))?;
+    let mut c = lock_client(&client)?;
+    send_success_locked(&mut c, &format!("Room renamed from '{old_name}' to '{new_name}'"))?;
     Ok(CommandResult::Handled)
 }
 
@@ -224,17 +202,17 @@ pub fn handle_super_export(client: Arc<Mutex<Client>>, _rooms: &Rooms, room: &St
 }
 
 pub fn handle_super_whitelist(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String) -> io::Result<CommandResult> {
-    let mut c = lock_client(&client)?;
     let rooms_map = lock_rooms(rooms)?;
     let room_arc = match rooms_map.get(room) {
         Some(r) => Arc::clone(r),
         None => {
+            let mut c = lock_client(&client)?;
             send_message_locked(&mut c, &format!("Room {room} not found").yellow().to_string())?;
             return Ok(CommandResult::Handled);
         }
     };
-
     let room_guard = lock_room(&room_arc)?;
+    let mut c = lock_client(&client)?;
 
     if room_guard.whitelist_enabled {
         send_success_locked(&mut c, "- Whitelist is currently ENABLED -")?;
@@ -254,47 +232,32 @@ pub fn handle_super_whitelist(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &
 }
 
 pub fn handle_super_whitelist_toggle(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String) -> io::Result<CommandResult> {
-    let mut c = lock_client(&client)?;
     let rooms_map = lock_rooms(rooms)?;
     let room_arc = match rooms_map.get(room) {
         Some(r) => Arc::clone(r),
         None => {
+            let mut c = lock_client(&client)?;
             send_message_locked(&mut c, &format!("Room {room} not found").yellow().to_string())?;
             return Ok(CommandResult::Handled);
         }
     };
 
-    {
+    let enabled_now = {
         let mut room_guard = lock_room(&room_arc)?;
         room_guard.whitelist_enabled = !room_guard.whitelist_enabled;
-    }
+        let enabled = room_guard.whitelist_enabled;
+        drop(room_guard);
 
-    if let Ok(_store_lock) = lock_rooms_storage() {
-        let mut serializable_map = HashMap::new();
-        for (k, arc_mutex_room) in rooms_map.iter() {
-            if let Ok(room_guard) = arc_mutex_room.lock() {
-                serializable_map.insert(k.clone(), room_guard.clone());
-            }
+        if let Err(e) = save_rooms_to_disk(&rooms_map) {
+            let mut c = lock_client(&client)?;
+            send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
+            return Ok(CommandResult::Handled);
         }
-        match serde_json::to_string_pretty(&serializable_map) {
-            Ok(json) => {
-                if let Err(e) = std::fs::write("data/rooms.json", json) {
-                    send_error_locked(&mut c, &format!("Failed to write rooms.json: {e}"))?;
-                    return Ok(CommandResult::Handled);
-                }
-            }
-            Err(e) => {
-                send_error_locked(&mut c, &format!("Failed to serialize rooms: {e}"))?;
-                return Ok(CommandResult::Handled);
-            }
-        }
-    } else {
-        send_error_locked(&mut c, "Failed to acquire room save lock")?;
-        return Ok(CommandResult::Handled);
-    }
+        enabled
+    };
 
-    let room_guard = lock_room(&room_arc)?;
-    if room_guard.whitelist_enabled {
+    let mut c = lock_client(&client)?;
+    if enabled_now {
         send_success_locked(&mut c, "Whitelist is now ENABLED")?;
     } else {
         send_success_locked(&mut c, "Whitelist is now DISABLED")?;
@@ -304,8 +267,8 @@ pub fn handle_super_whitelist_toggle(client: Arc<Mutex<Client>>, rooms: &Rooms, 
 }
 
 pub fn handle_super_whitelist_add(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String, users: &String) -> io::Result<CommandResult> {
-    let mut c = lock_client(&client)?;
     let rooms_map = lock_rooms(rooms)?;
+    let mut c = lock_client(&client)?;
     let room_arc = match rooms_map.get(room) {
         Some(r) => Arc::clone(r),
         None => {
@@ -326,6 +289,7 @@ pub fn handle_super_whitelist_add(client: Arc<Mutex<Client>>, rooms: &Rooms, roo
                 added_any = true;
             }
         }
+        drop(room_guard);
     }
 
     if added_any {
@@ -338,8 +302,8 @@ pub fn handle_super_whitelist_add(client: Arc<Mutex<Client>>, rooms: &Rooms, roo
 }
 
 pub fn handle_super_whitelist_remove(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String, users: &String) -> io::Result<CommandResult> {
-    let mut c = lock_client(&client)?;
     let rooms_map = lock_rooms(rooms)?;
+    let mut c = lock_client(&client)?;
     let room_arc = match rooms_map.get(room) {
         Some(r) => Arc::clone(r),
         None => {
@@ -360,6 +324,7 @@ pub fn handle_super_whitelist_remove(client: Arc<Mutex<Client>>, rooms: &Rooms, 
                 send_message_locked(&mut c, &format!("'{user}' is not in the whitelist").cyan().to_string())?;
             }
         }
+        drop(room_guard);
     }
 
     if removed_any {
@@ -372,16 +337,17 @@ pub fn handle_super_whitelist_remove(client: Arc<Mutex<Client>>, rooms: &Rooms, 
 }
 
 pub fn handle_super_limit(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String) -> io::Result<CommandResult> {
-    let mut c = lock_client(&client)?;
     let rooms_map = lock_rooms(rooms)?;
     let room_arc = match rooms_map.get(room) {
         Some(r) => Arc::clone(r),
         None => {
+            let mut c = lock_client(&client)?;
             send_message_locked(&mut c, &format!("Room {room} not found").yellow().to_string())?;
             return Ok(CommandResult::Handled);
         }
     };
     let room_guard = lock_room(&room_arc)?;
+    let mut c = lock_client(&client)?;
 
     let rate_display = if room_guard.msg_rate == 0 {
         "UNLIMITED".to_string()
@@ -401,27 +367,27 @@ pub fn handle_super_limit(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &Stri
 }
 
 pub fn handle_super_limit_rate(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String, limit: u8) -> io::Result<CommandResult> {            
-    let mut c = lock_client(&client)?;
     let rooms_map   = lock_rooms(rooms)?;
-
+    let room_arc    = match rooms_map.get(room) {
+        Some(r) => Arc::clone(r),
+        None => {
+            let mut c = lock_client(&client)?;
+            send_message_locked(&mut c, &"Room not found".yellow().to_string())?;
+            return Ok(CommandResult::Handled);
+        }
+    };
     {
-        let room_arc    = match rooms_map.get(room) {
-            Some(r) => Arc::clone(r),
-            None => {
-                send_message_locked(&mut c, &"Room not found".yellow().to_string())?;
-                return Ok(CommandResult::Handled);
-            }
-        };
-        let _store_lock = lock_rooms_storage()?;
         let mut room_guard = lock_room(&room_arc)?;
         room_guard.msg_rate = limit;
     }
 
     if let Err(e) = save_rooms_to_disk(&rooms_map) {
+        let mut c = lock_client(&client)?;
         send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
         return Ok(CommandResult::Handled);
     }
 
+    let mut c = lock_client(&client)?;
     if limit == 0 {
         send_success_locked(&mut c, "Message rate limit set to UNLIMITED")?;
     } else {
@@ -432,27 +398,27 @@ pub fn handle_super_limit_rate(client: Arc<Mutex<Client>>, rooms: &Rooms, room: 
 }
 
 pub fn handle_super_limit_session(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String, limit: u32) -> io::Result<CommandResult> {
-    let mut c = lock_client(&client)?;
     let rooms_map   = lock_rooms(rooms)?;
-
+    let room_arc    = match rooms_map.get(room) {
+        Some(r) => Arc::clone(r),
+        None => {
+            let mut c = lock_client(&client)?;
+            send_message_locked(&mut c, &"Room not found".yellow().to_string())?;
+            return Ok(CommandResult::Handled);
+        }
+    };
     {
-        let room_arc    = match rooms_map.get(room) {
-            Some(r) => Arc::clone(r),
-            None => {
-                send_message_locked(&mut c, &"Room not found".yellow().to_string())?;
-                return Ok(CommandResult::Handled);
-            }
-        };
-        let _store_lock = lock_rooms_storage()?;
         let mut room_guard = lock_room(&room_arc)?;
         room_guard.session_timeout = limit;
     }
 
     if let Err(e) = save_rooms_to_disk(&rooms_map) {
+        let mut c = lock_client(&client)?;
         send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
         return Ok(CommandResult::Handled);
     }
 
+    let mut c = lock_client(&client)?;
     if limit == 0 {
         send_success_locked(&mut c, "Session timeout set to UNLIMITED")?;
     } else {

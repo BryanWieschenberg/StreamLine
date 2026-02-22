@@ -114,8 +114,7 @@ where
             use crossterm::event::MouseEventKind;
             match me.kind {
                 MouseEventKind::ScrollUp => {
-                    let total = app.messages.len();
-                    app.scroll_offset = app.scroll_offset.saturating_add(1).min(total);
+                    app.scroll_offset = app.scroll_offset.saturating_add(1);
                 }
                 MouseEventKind::ScrollDown => {
                     app.scroll_offset = app.scroll_offset.saturating_sub(1);
@@ -272,15 +271,13 @@ where
                     }
                 }
                 KeyCode::PageUp => {
-                    let total = app.messages.len();
-                    app.scroll_offset = app.scroll_offset.saturating_add(10).min(total);
+                    app.scroll_offset = app.scroll_offset.saturating_add(10);
                 }
                 KeyCode::PageDown => {
                     app.scroll_offset = app.scroll_offset.saturating_sub(10);
                 }
                 KeyCode::Home => {
-                    let total = app.messages.len();
-                    app.scroll_offset = total;
+                    app.scroll_offset = 100000;
                 }
                 KeyCode::End => {
                     app.scroll_offset = 0;
