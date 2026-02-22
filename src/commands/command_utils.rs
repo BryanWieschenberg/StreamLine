@@ -253,18 +253,8 @@ pub fn unix_timestamp(rooms: &Rooms, room_name: &str, username: &str) -> io::Res
     }
 
     {
-        let _store_lock = lock_rooms_storage()?;
-        let rooms_map   = lock_rooms(rooms)?;
-
-        let mut serialisable = std::collections::HashMap::new();
-        for (name, arc) in rooms_map.iter() {
-            if let Ok(room) = arc.lock() {
-                serialisable.insert(name.clone(), room.clone());
-            }
-        }
-
-        let json = serde_json::to_string_pretty(&serialisable)?;
-        std::fs::write("data/rooms.json", json)?;
+        let rooms_map = lock_rooms(rooms)?;
+        save_rooms_to_disk(&rooms_map)?;
     }
 
     Ok(())
@@ -279,9 +269,7 @@ pub fn duration_format_passes(duration: &str) -> bool{
             Err(_) => return false,
         };
         re.is_match(duration)
-    };
-
-    true
+    }
 }
 
 pub fn parse_duration(spec: &str) -> io::Result<u64> {

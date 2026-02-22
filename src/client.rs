@@ -67,7 +67,7 @@ const C_ACCENT2: Color = Color::Rgb(150, 150, 150);
 const C_YELLOW: Color = Color::Rgb(220, 220, 220);
 const C_RED: Color = Color::Red;
 const C_GREEN: Color = Color::Rgb(120, 160, 120);
-const C_SYSTEM: Color = Color::DarkGray;
+const C_SYSTEM: Color = Color::Gray;
 
 const COMMANDS_ALWAYS: &[&str] = &[
     "/help",

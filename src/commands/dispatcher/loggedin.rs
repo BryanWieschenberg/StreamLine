@@ -497,9 +497,9 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
         }
 
         Command::RoomList => {
+            let locked_rooms = lock_rooms(rooms)?;
             let _lock = lock_rooms_storage()?;
 
-            let locked_rooms = lock_rooms(rooms)?;
             let mut visible_rooms = Vec::new();
 
             for (room_name, room_arc) in locked_rooms.iter() {
@@ -527,15 +527,13 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
         }
 
         Command::RoomCreate { name, whitelist } => {
+            let mut rooms_map = lock_rooms(rooms)?;
             let _lock = lock_rooms_storage()?;
 
-            {
-                let rooms = lock_rooms(rooms)?;
-                if rooms.contains_key(&name) {
-                    let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", "Error: Room already exists".yellow())?;
-                    return Ok(CommandResult::Handled);
-                }
+            if rooms_map.contains_key(&name) {
+                let mut client = lock_client(&client)?;
+                writeln!(client.stream, "{}", "Error: Room already exists".yellow())?;
+                return Ok(CommandResult::Handled);
             }
                 
             let new_room = json!({
@@ -617,10 +615,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 online_users: Vec::new(),
             };
 
-            {
-                let mut rooms = lock_rooms(rooms)?;
-                rooms.insert(name.clone(), Arc::new(Mutex::new(room_obj)));
-            }
+            rooms_map.insert(name.clone(), Arc::new(Mutex::new(room_obj)));
 
             let mut client = lock_client(&client)?;
             if whitelist {
@@ -633,8 +628,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
         }
 
         Command::RoomJoin { name } => {
-            let _lock = lock_rooms_storage()?;
             let rooms = lock_rooms(rooms)?;
+            let _lock = lock_rooms_storage()?;
 
             let room_arc = match rooms.get(&name) {
                 Some(r) => Arc::clone(r),
@@ -846,6 +841,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 }
             };
 
+            let mut rooms_map = lock_rooms(rooms)?;
             let _lock = lock_rooms_storage()?;
 
             let file = File::open("data/rooms.json")?;
@@ -877,13 +873,10 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
                 }
             };
 
-            {
-                let mut rooms = lock_rooms(rooms)?;
-                rooms.insert(room_name.clone(), Arc::new(Mutex::new(Room {
-                    online_users: vec![],
-                    ..room_obj
-                })));
-            }
+            rooms_map.insert(room_name.clone(), Arc::new(Mutex::new(Room {
+                online_users: vec![],
+                ..room_obj
+            })));
 
             let mut client = lock_client(&client)?;
             writeln!(client.stream, "{}", format!("Imported room: {}", room_name).green())?;
@@ -891,8 +884,8 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
         }
 
         Command::RoomDelete { name, force } => {
-            let _lock = lock_rooms_storage()?;
             let mut rooms = lock_rooms(rooms)?;
+            let _lock = lock_rooms_storage()?;
 
             let room_arc = match rooms.get(&name) {
                 Some(r) => Arc::clone(r),
