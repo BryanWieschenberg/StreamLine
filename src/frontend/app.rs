@@ -36,12 +36,14 @@ pub const COMMANDS_ALWAYS: &[&str] = &[
 ];
 
 pub const COMMANDS_GUEST: &[&str] = &[
+    "/account",
     "/account register",
     "/account login",
     "/account import",
 ];
 
 pub const COMMANDS_LOGGEDIN: &[&str] = &[
+    "/account",
     "/account logout",
     "/account edit username",
     "/account edit password",
@@ -62,7 +64,6 @@ pub const COMMANDS_LOGGEDIN: &[&str] = &[
 ];
 
 pub const COMMANDS_INROOM: &[&str] = &[
-    "/room leave",
     "/leave",
     "/status",
     "/afk",
@@ -130,7 +131,7 @@ impl Autocomplete {
         self.candidates.clear();
         self.index = None;
 
-        if input.starts_with('/') && !input.contains(' ') {
+        if input.starts_with('/') {
             let state = MY_STATE.lock().ok();
             let role = MY_ROLE.lock().ok();
             let role_str = role.as_deref().map(|s| s.as_str()).unwrap_or("");

@@ -25,21 +25,12 @@ pub fn handle_super_users(client: Arc<Mutex<Client>>, clients: &Clients, rooms: 
 
     writeln!(c.stream, "{}", format!("User data for {room}:").green())?;
     c.stream.flush()?;
+    drop(c);
     
     let clients_map = lock_clients(clients)?;
 
     let mut status_map = std::collections::HashMap::new();
     for c_arc in clients_map.values() {
-        if Arc::ptr_eq(c_arc, &client) {
-            if let ClientState::InRoom { username, room: rnm, is_afk, room_time, .. } = &c.state {
-                if rnm == room {
-                    let secs = room_time.and_then(|t| t.elapsed().ok()).map(|d| d.as_secs()).unwrap_or(0);
-                    status_map.insert(username.clone(), (*is_afk, secs));
-                }
-            }
-            continue;
-        }
-
         if let Ok(target_c) = c_arc.try_lock() {
             if let ClientState::InRoom { username, room: rnm, is_afk, room_time, .. } = &target_c.state {
                 if rnm == room {
@@ -49,6 +40,12 @@ pub fn handle_super_users(client: Arc<Mutex<Client>>, clients: &Clients, rooms: 
             }
         }
     }
+    drop(clients_map);
+
+    let mut c = match lock_client(&client) {
+        Ok(guard) => guard,
+        Err(_) => return Ok(CommandResult::Handled),
+    };
 
     for (uname, udata) in &room_guard.users {
         if !room_guard.online_users.contains(uname) {

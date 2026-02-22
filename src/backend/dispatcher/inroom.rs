@@ -163,7 +163,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         Command::SuperRoles => superuser_roles::handle_super_roles(client, rooms, room),
         Command::SuperRolesAdd { role, commands } => superuser_roles::handle_super_roles_add(client, rooms, room, &role, &commands),
         Command::SuperRolesRevoke { role, commands } => superuser_roles::handle_super_roles_revoke(client, rooms, room, &role, &commands),
-        Command::SuperRolesAssign { role, users } => superuser_roles::handle_super_roles_assign(client, rooms, room, &role, &users),
+        Command::SuperRolesAssign { role, users } => superuser_roles::handle_super_roles_assign(client, clients, rooms, room, &role, &users),
         Command::SuperRolesRecolor { role, color } => superuser_roles::handle_super_roles_recolor(client, rooms, room, &role, &color),
         Command::Users => user::handle_users(client, rooms, room),
         Command::UsersRename { name } => user::handle_users_rename(client, rooms, room, username, &name),

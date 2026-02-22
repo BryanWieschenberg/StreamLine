@@ -178,6 +178,7 @@ pub fn handle_mod_kick(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Ro
         eprintln!("Failed to update last_seen for {target} in {room}: {e}");
     }
 
+    drop(c);
     let clients_map = lock_clients(clients)?;
     let mut kicked = false;
     for c_arc in clients_map.values() {
@@ -205,6 +206,11 @@ pub fn handle_mod_kick(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Ro
         }
     }
     drop(clients_map);
+
+    let mut c = match lock_client(&client) {
+        Ok(g) => g,
+        Err(_) => return Ok(CommandResult::Handled),
+    };
 
     {
         let rooms_map = lock_rooms(rooms)?;
@@ -296,6 +302,7 @@ pub fn handle_mod_ban(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Roo
 
     let _ = unix_timestamp(rooms, room, target);
 
+    drop(c);
     let clients_map = lock_clients(clients)?;
     let human_len = if ban_secs == 0 {
         "PERMANENT".to_string()
@@ -330,6 +337,11 @@ pub fn handle_mod_ban(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Roo
         }
     }
     drop(clients_map);
+
+    let mut c = match lock_client(&client) {
+        Ok(g) => g,
+        Err(_) => return Ok(CommandResult::Handled),
+    };
 
     {
         let rooms_map = lock_rooms(rooms)?;
@@ -465,6 +477,7 @@ pub fn handle_mod_mute(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Ro
 
     let _ = unix_timestamp(rooms, room, target);
 
+    drop(c);
     let clients_map = lock_clients(clients)?;
     let human_len = if mute_secs == 0 {
         "PERMANENT".to_string()
@@ -497,6 +510,11 @@ pub fn handle_mod_mute(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Ro
         }
     }
     drop(clients_map);
+
+    let mut c = match lock_client(&client) {
+        Ok(g) => g,
+        Err(_) => return Ok(CommandResult::Handled),
+    };
 
     {
         let rooms_map = lock_rooms(rooms)?;
@@ -561,6 +579,7 @@ pub fn handle_mod_unmute(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &
         }
     }
 
+    drop(c);
     let clients_map = lock_clients(clients)?;
     for c_arc in clients_map.values() {
         let mut target_c = match c_arc.lock() {
@@ -576,6 +595,11 @@ pub fn handle_mod_unmute(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &
         }
     }
     drop(clients_map);
+
+    let mut c = match lock_client(&client) {
+        Ok(g) => g,
+        Err(_) => return Ok(CommandResult::Handled),
+    };
 
     send_success_locked(&mut c, &format!("Unmuted {target}"))?;
     Ok(CommandResult::Handled)

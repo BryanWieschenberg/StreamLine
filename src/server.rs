@@ -469,6 +469,7 @@ fn main() -> std::io::Result<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
+                let _ = stream.set_nodelay(true);
                 let peer = stream.peer_addr()?;
 
                 let clients = Arc::clone(&clients);

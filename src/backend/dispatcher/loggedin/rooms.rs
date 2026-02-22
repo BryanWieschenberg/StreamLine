@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::shared::types::{Client, ClientState, Room, RoomUser, Rooms};
-use crate::shared::utils::{lock_client, lock_rooms, lock_rooms_storage, send_success, send_error, send_message, load_json, save_json, send_error_locked, send_success_locked};
+use crate::shared::utils::{lock_client, lock_rooms, lock_room, lock_rooms_storage, send_success, send_error, send_message, load_json, save_json, send_error_locked, send_success_locked};
 use crate::backend::command_utils::sync_room_members;
 use crate::backend::dispatcher::CommandResult;
 use crate::shared::types::{Clients, PublicKeys};
@@ -31,6 +31,8 @@ pub fn handle_room_list(client: Arc<Mutex<Client>>, rooms: &Rooms, username: &St
             }
         }
     }
+
+    drop(locked_rooms);
 
     if visible_rooms.is_empty() {
         send_error(&client, "No available rooms found")?;
@@ -366,25 +368,24 @@ pub fn handle_room_import(client: Arc<Mutex<Client>>, rooms: &Rooms, filename: &
 }
 
 pub fn handle_room_delete(client: Arc<Mutex<Client>>, rooms: &Rooms, username: &String, name: &String, force: bool) -> io::Result<CommandResult> {
-    let mut rooms_map = lock_rooms(rooms)?;
-    let _lock = lock_rooms_storage()?;
-
-    let room_arc = match rooms_map.get(name) {
-        Some(r) => Arc::clone(r),
-        None => {
-            send_message(&client, &format!("Error: Room {name} not found").yellow().to_string())?;
-            return Ok(CommandResult::Handled);
-        }
-    };
-
     {
-        let room = match room_arc.lock() {
+        let rooms_map = lock_rooms(rooms)?;
+        let room_arc = match rooms_map.get(name) {
+            Some(r) => Arc::clone(r),
+            None => {
+                send_message(&client, &format!("Error: Room {name} not found").yellow().to_string())?;
+                return Ok(CommandResult::Handled);
+            }
+        };
+
+        let room = match lock_room(&room_arc) {
             Ok(g) => g,
             Err(_) => {
                 send_error(&client, "Could not lock room")?;
                 return Ok(CommandResult::Handled);
             }
         };
+
         match room.users.get(username) {
             Some(user) if user.role == "owner" => (),
             _ => {
@@ -396,9 +397,11 @@ pub fn handle_room_delete(client: Arc<Mutex<Client>>, rooms: &Rooms, username: &
 
     if !force {
         let mut c = lock_client(&client)?;
+        use std::io::Write;
         writeln!(c.stream, "{}", format!("Are you sure you want to delete room {name}? (y/n): ").red())?;
 
         let mut reader = BufReader::new(c.stream.try_clone()?);
+        drop(c);
         loop {
             let mut line = String::new();
             let bytes_read = reader.read_line(&mut line)?;
@@ -421,6 +424,8 @@ pub fn handle_room_delete(client: Arc<Mutex<Client>>, rooms: &Rooms, username: &
         }
     }
 
+    let mut rooms_map = lock_rooms(rooms)?;
+    let _lock = lock_rooms_storage()?;
     rooms_map.remove(name);
 
     let mut rooms_json = load_json("data/rooms.json")?;

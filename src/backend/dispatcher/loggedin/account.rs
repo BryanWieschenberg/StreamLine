@@ -190,6 +190,7 @@ pub fn handle_account_delete(client: Arc<Mutex<Client>>, username: &String, forc
         writeln!(c.stream, "{}", "Are you sure you want to delete your account? (y/n): ".red())?;
 
         let mut reader: BufReader<std::net::TcpStream> = BufReader::new(c.stream.try_clone()?);
+        drop(c);
         loop {
             let mut line = String::new();
             let bytes_read = reader.read_line(&mut line)?;

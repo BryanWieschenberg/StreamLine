@@ -2,8 +2,8 @@ use std::io::{self, BufRead};
 use std::sync::{Arc, Mutex};
 use colored::*;
 
-use crate::shared::types::{Client, ClientState, Rooms, RoomUser};
-use crate::shared::utils::{lock_client, lock_rooms, lock_room, lock_rooms_storage, send_success, send_error, send_message, save_rooms_to_disk, ColorizeExt, send_message_locked, send_error_locked, send_success_locked};
+use crate::shared::types::{Client, ClientState, Clients, Rooms, RoomUser};
+use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room, lock_rooms_storage, send_success, send_error, send_message, save_rooms_to_disk, ColorizeExt, send_message_locked, send_error_locked, send_success_locked};
 use crate::backend::dispatcher::CommandResult;
 use crate::backend::command_utils::{RESTRICTED_COMMANDS, command_order};
 
@@ -180,7 +180,7 @@ pub fn handle_super_roles_revoke(client: Arc<Mutex<Client>>, rooms: &Rooms, room
     Ok(CommandResult::Handled)
 }
 
-pub fn handle_super_roles_assign(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String, role: &String, users: &String) -> io::Result<CommandResult> {
+pub fn handle_super_roles_assign(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, room: &String, role: &String, users: &String) -> io::Result<CommandResult> {
     let target_role = match role.to_lowercase().as_str() {
         "usr" | "user" => "user",
         "mod" | "moderator" => "moderator",
@@ -212,6 +212,8 @@ pub fn handle_super_roles_assign(client: Arc<Mutex<Client>>, rooms: &Rooms, room
     };
 
     let mut assigned = Vec::<String>::new();
+    let mut owner_transfer_approved = false;
+
     {
         let mut c = lock_client(&client)?;
         let rooms_map   = lock_rooms(rooms)?;
@@ -222,8 +224,8 @@ pub fn handle_super_roles_assign(client: Arc<Mutex<Client>>, rooms: &Rooms, room
                 return Ok(CommandResult::Handled);
             }
         };
-        let _store_lock = lock_rooms_storage()?;
-        let mut room_guard = lock_room(&room_arc)?;
+        
+        let room_guard = lock_room(&room_arc)?;
 
         if target_role == "owner" {
             match room_guard.users.get(&username) {
@@ -233,38 +235,57 @@ pub fn handle_super_roles_assign(client: Arc<Mutex<Client>>, rooms: &Rooms, room
                     return Ok(CommandResult::Handled);
                 }
             }
+        }
+    }
 
-            let new_owner = users_vec[0];
+    if target_role == "owner" {
+        let new_owner = users_vec[0];
 
-            let mut cli = c;
-            use std::io::Write;
-            writeln!(cli.stream, "{}", format!("Assigning {new_owner} as owner will transfer room ownership to them. Are you sure you want to do this? (y/n): ").red())?;
+        let mut cli = lock_client(&client)?;
+        use std::io::Write;
+        writeln!(cli.stream, "{}", format!("Assigning {new_owner} as owner will transfer room ownership to them. Are you sure you want to do this? (y/n): ").red())?;
 
-            let mut reader = std::io::BufReader::new(cli.stream.try_clone()?);
-            drop(cli);
-            loop {
-                let mut line = String::new();
-                let bytes = reader.read_line(&mut line)?;
-                if bytes == 0 {
-                    return Ok(CommandResult::Stop);
+        let mut reader = std::io::BufReader::new(cli.stream.try_clone()?);
+        drop(cli);
+        loop {
+            let mut line = String::new();
+            let bytes = reader.read_line(&mut line)?;
+            if bytes == 0 {
+                return Ok(CommandResult::Stop);
+            }
+            match line.trim().to_lowercase().as_str() {
+                "y" => {
+                    owner_transfer_approved = true;
+                    break;
+                },
+                "n" => {
+                    send_message(&client, &"Owner transfer cancelled".yellow().to_string())?;
+                    return Ok(CommandResult::Handled);
                 }
-                match line.trim().to_lowercase().as_str() {
-                    "y" => {
-                        break;
-                    },
-                    "n" => {
-                        send_message(&client, &"Owner transfer cancelled".yellow().to_string())?;
-                        return Ok(CommandResult::Handled);
-                    }
-                    _ => {
-                        let mut cli = lock_client(&client)?;
-                        writeln!(cli.stream, "{}", "(y/n): ".red())?;
-                        cli.stream.flush()?;
-                        drop(cli);
-                    }
+                _ => {
+                    let mut cli = lock_client(&client)?;
+                    writeln!(cli.stream, "{}", "(y/n): ".red())?;
+                    cli.stream.flush()?;
+                    drop(cli);
                 }
             }
-            
+        }
+    }
+
+    {
+        let rooms_map   = lock_rooms(rooms)?;
+        let room_arc    = match rooms_map.get(room) {
+            Some(r) => Arc::clone(r),
+            None => {
+                send_message(&client, &format!("Room {room} not found").yellow().to_string())?;
+                return Ok(CommandResult::Handled);
+            }
+        };
+        let _store_lock = lock_rooms_storage()?;
+        let mut room_guard = lock_room(&room_arc)?;
+
+        if target_role == "owner" && owner_transfer_approved {
+            let new_owner = users_vec[0];
             if new_owner != username {
                 if let Some(cur_owner) = room_guard.users.get_mut(&username) {
                     if cur_owner.role == "owner" {
@@ -311,6 +332,26 @@ pub fn handle_super_roles_assign(client: Arc<Mutex<Client>>, rooms: &Rooms, room
     if assigned.is_empty() {
         send_message(&client, &"No role changes made".yellow().to_string())?;
     } else {
+        if let Ok(clients_map) = lock_clients(clients) {
+            for target_arc in clients_map.values() {
+                if let Ok(mut c) = target_arc.lock() {
+                    if let ClientState::InRoom { username: u, room: r, .. } = &c.state {
+                        if r == room {
+                            let mut send_role = None;
+                            if assigned.contains(&u) {
+                                send_role = Some(target_role);
+                            } else if target_role == "owner" && owner_transfer_approved && u == &username {
+                                send_role = Some("admin");
+                            }
+                            if let Some(r_name) = send_role {
+                                use std::io::Write;
+                                let _ = writeln!(c.stream, "/ROLE {r_name}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
         send_success(&client, &format!("Assigned role '{target_role}' to: {}", assigned.join(", ")))?;
     }
 

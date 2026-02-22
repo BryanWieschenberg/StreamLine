@@ -43,6 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut stream = TcpStream::connect(&address)?;
+    let _ = stream.set_nodelay(true);
     let stream_clone = stream.try_clone()?;
 
     enable_raw_mode()?;
@@ -113,7 +114,8 @@ where
             use crossterm::event::MouseEventKind;
             match me.kind {
                 MouseEventKind::ScrollUp => {
-                    app.scroll_offset = app.scroll_offset.saturating_add(1);
+                    let total = app.messages.len();
+                    app.scroll_offset = app.scroll_offset.saturating_add(1).min(total);
                 }
                 MouseEventKind::ScrollDown => {
                     app.scroll_offset = app.scroll_offset.saturating_sub(1);
@@ -270,14 +272,15 @@ where
                     }
                 }
                 KeyCode::PageUp => {
-                    app.scroll_offset = app.scroll_offset.saturating_add(10);
+                    let total = app.messages.len();
+                    app.scroll_offset = app.scroll_offset.saturating_add(10).min(total);
                 }
                 KeyCode::PageDown => {
                     app.scroll_offset = app.scroll_offset.saturating_sub(10);
                 }
                 KeyCode::Home => {
                     let total = app.messages.len();
-                    app.scroll_offset = total.saturating_sub(20);
+                    app.scroll_offset = total;
                 }
                 KeyCode::End => {
                     app.scroll_offset = 0;
