@@ -131,6 +131,8 @@ pub fn handle_super_rename(client: Arc<Mutex<Client>>, clients: &Clients, rooms:
                 if let ClientState::InRoom { room: r, .. } = &mut target_c.state {
                     if r == &old_name {
                         *r = new_name.clone();
+                        let _ = writeln!(target_c.stream, "/ROOM_NAME {new_name}");
+                        let _ = target_c.stream.flush();
                     }
                 }
             }
@@ -231,7 +233,7 @@ pub fn handle_super_whitelist(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &
     Ok(CommandResult::Handled)
 }
 
-pub fn handle_super_whitelist_toggle(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String) -> io::Result<CommandResult> {
+pub fn handle_super_whitelist_toggle(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, room: &String) -> io::Result<CommandResult> {
     let rooms_map = lock_rooms(rooms)?;
     let room_arc = match rooms_map.get(room) {
         Some(r) => Arc::clone(r),
@@ -242,10 +244,11 @@ pub fn handle_super_whitelist_toggle(client: Arc<Mutex<Client>>, rooms: &Rooms, 
         }
     };
 
-    let enabled_now = {
+    let (enabled_now, whitelist) = {
         let mut room_guard = lock_room(&room_arc)?;
         room_guard.whitelist_enabled = !room_guard.whitelist_enabled;
         let enabled = room_guard.whitelist_enabled;
+        let wl = room_guard.whitelist.clone();
         drop(room_guard);
 
         if let Err(e) = save_rooms_to_disk(&rooms_map) {
@@ -253,8 +256,36 @@ pub fn handle_super_whitelist_toggle(client: Arc<Mutex<Client>>, rooms: &Rooms, 
             send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
             return Ok(CommandResult::Handled);
         }
-        enabled
+        (enabled, wl)
     };
+
+    if enabled_now {
+        let clients_map = lock_clients(clients)?;
+        for c_arc in clients_map.values() {
+            if let Ok(mut target_c) = c_arc.try_lock() {
+                let (should_kick, u_clone) = if let ClientState::InRoom { username: u, room: r, .. } = &target_c.state {
+                    if r == room && !whitelist.contains(u) {
+                        let room_guard = lock_room(&room_arc)?;
+                        let is_owner = room_guard.users.get(u).map(|ud| ud.role == "owner").unwrap_or(false);
+                        drop(room_guard);
+                        (!is_owner, Some(u.clone()))
+                    } else {
+                        (false, None)
+                    }
+                } else {
+                    (false, None)
+                };
+
+                if should_kick {
+                    if let Some(uname) = u_clone {
+                        let _ = writeln!(target_c.stream, "/LOBBY_STATE");
+                        let _ = writeln!(target_c.stream, "{}", format!("The whitelist for '{room}' has been enabled, and you are not whitelisted.").red());
+                        target_c.state = ClientState::LoggedIn { username: uname };
+                    }
+                }
+            }
+        }
+    }
 
     let mut c = lock_client(&client)?;
     if enabled_now {
@@ -301,7 +332,7 @@ pub fn handle_super_whitelist_add(client: Arc<Mutex<Client>>, rooms: &Rooms, roo
     Ok(CommandResult::Handled)
 }
 
-pub fn handle_super_whitelist_remove(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String, users: &String) -> io::Result<CommandResult> {
+pub fn handle_super_whitelist_remove(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, room: &String, users: &String) -> io::Result<CommandResult> {
     let rooms_map = lock_rooms(rooms)?;
     let mut c = lock_client(&client)?;
     let room_arc = match rooms_map.get(room) {
@@ -313,23 +344,56 @@ pub fn handle_super_whitelist_remove(client: Arc<Mutex<Client>>, rooms: &Rooms, 
     };
 
     let mut removed_any = false;
-    {
+    let mut removed_users = Vec::new();
+    let whitelist_enabled = {
         let mut room_guard = lock_room(&room_arc)?;
         for user in users.split_whitespace() {
             if let Some(pos) = room_guard.whitelist.iter().position(|u| u == user) {
                 room_guard.whitelist.remove(pos);
                 send_success_locked(&mut c, &format!("Removed '{user}' from the whitelist"))?;
                 removed_any = true;
+                removed_users.push(user.to_string());
             } else {
                 send_message_locked(&mut c, &format!("'{user}' is not in the whitelist").cyan().to_string())?;
             }
         }
+        let enabled = room_guard.whitelist_enabled;
         drop(room_guard);
-    }
+        enabled
+    };
 
     if removed_any {
         if let Err(e) = save_rooms_to_disk(&rooms_map) {
             send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
+        }
+
+        if whitelist_enabled {
+            drop(c);
+            let clients_map = lock_clients(clients)?;
+            for c_arc in clients_map.values() {
+                if let Ok(mut target_c) = c_arc.try_lock() {
+                    let (should_kick, u_clone) = if let ClientState::InRoom { username: u, room: r, .. } = &target_c.state {
+                        if r == room && removed_users.contains(u) {
+                            let room_guard = lock_room(&room_arc)?;
+                            let is_owner = room_guard.users.get(u).map(|ud| ud.role == "owner").unwrap_or(false);
+                            drop(room_guard);
+                            (!is_owner, Some(u.clone()))
+                        } else {
+                            (false, None)
+                        }
+                    } else {
+                        (false, None)
+                    };
+
+                    if should_kick {
+                        if let Some(uname) = u_clone {
+                            let _ = writeln!(target_c.stream, "/LOBBY_STATE");
+                            let _ = writeln!(target_c.stream, "{}", format!("You have been removed from the whitelist for '{room}' and have been kicked.").red());
+                            target_c.state = ClientState::LoggedIn { username: uname };
+                        }
+                    }
+                }
+            }
         }
     }
 

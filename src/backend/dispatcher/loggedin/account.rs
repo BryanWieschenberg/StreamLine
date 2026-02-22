@@ -63,7 +63,7 @@ pub fn handle_account_edit_username(client: Arc<Mutex<Client>>, username: &Strin
     let mut c = lock_client(&client)?;
     c.state = ClientState::LoggedIn { username: new_username.clone() };
 
-    send_message_locked(&mut c, "/GUEST_STATE")?;
+    send_message_locked(&mut c, &format!("/LOGIN_OK {new_username}"))?;
     send_success_locked(&mut c, &format!("Username changed from {old_username} to: {new_username}"))?;
     Ok(CommandResult::Handled)
 }

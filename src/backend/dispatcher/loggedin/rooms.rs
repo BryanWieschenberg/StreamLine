@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::shared::types::{Client, ClientState, Room, RoomUser, Rooms};
-use crate::shared::utils::{lock_client, lock_rooms, lock_room, lock_rooms_storage, send_success, send_error, send_message, load_json, save_json, send_error_locked, send_success_locked};
+use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room, lock_rooms_storage, send_success, send_error, send_message, load_json, save_json, send_error_locked, send_success_locked};
 use crate::backend::command_utils::{sync_room_members, sync_user_commands};
 use crate::backend::dispatcher::CommandResult;
 use crate::shared::types::{Clients, PublicKeys};
@@ -368,7 +368,7 @@ pub fn handle_room_import(client: Arc<Mutex<Client>>, rooms: &Rooms, filename: &
     Ok(CommandResult::Handled)
 }
 
-pub fn handle_room_delete(client: Arc<Mutex<Client>>, rooms: &Rooms, username: &String, name: &String, force: bool) -> io::Result<CommandResult> {
+pub fn handle_room_delete(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, name: &String, force: bool) -> io::Result<CommandResult> {
     {
         let rooms_map = lock_rooms(rooms)?;
         let room_arc = match rooms_map.get(name) {
@@ -439,6 +439,28 @@ pub fn handle_room_delete(client: Arc<Mutex<Client>>, rooms: &Rooms, username: &
             return Ok(CommandResult::Handled);
         }
         save_json("data/rooms.json", &rooms_json)?;
+    }
+
+    {
+        let clients_map = lock_clients(clients)?;
+        for c_arc in clients_map.values() {
+            if let Ok(mut target_c) = c_arc.try_lock() {
+                let in_room = if let ClientState::InRoom { room: r, .. } = &target_c.state {
+                    r == name
+                } else {
+                    false
+                };
+
+                if in_room {
+                    let _ = writeln!(target_c.stream, "/LOBBY_STATE");
+                    let _ = writeln!(target_c.stream, "{}", format!("The room '{name}' has been deleted by its owner.").red());
+                    target_c.state = ClientState::LoggedIn { username: match &target_c.state {
+                        ClientState::InRoom { username, .. } => username.clone(),
+                        _ => "Guest".to_string(),
+                    }};
+                }
+            }
+        }
     }
 
     send_success(&client, &format!("Room {name} deleted successfully"))?;

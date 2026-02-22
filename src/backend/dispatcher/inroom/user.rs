@@ -212,41 +212,43 @@ pub fn handle_users_recolor(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &St
 }
 
 pub fn handle_users_hide(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, pubkeys: &PublicKeys, username: &String, room: &String) -> io::Result<CommandResult> {
-    let rooms_map = lock_rooms(rooms)?;
-    let room_arc = match rooms_map.get(room) {
-        Some(r) => Arc::clone(r),
-        None => {
-            let mut c = lock_client(&client)?;
-            send_message_locked(&mut c, &format!("Room {room} not found").yellow().to_string())?;
-            return Ok(CommandResult::Handled);
-        }
-    };
-
-    let now_hidden;
     {
-        let mut room_guard = lock_room(&room_arc)?;
-        let mut c = lock_client(&client)?;
-        match room_guard.users.get_mut(username) {
-            Some(u) => {
-                u.hidden = !u.hidden;
-                now_hidden = u.hidden;
-            }
+        let rooms_map = lock_rooms(rooms)?;
+        let room_arc = match rooms_map.get(room) {
+            Some(r) => Arc::clone(r),
             None => {
-                send_message_locked(&mut c, &"Error: user record missing".red().to_string())?;
+                let mut c = lock_client(&client)?;
+                send_message_locked(&mut c, &format!("Room {room} not found").yellow().to_string())?;
                 return Ok(CommandResult::Handled);
             }
-        }
-        drop(room_guard);
+        };
 
-        if let Err(e) = save_rooms_to_disk(&rooms_map) {
-            send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
-            return Ok(CommandResult::Handled);
-        }
+        let now_hidden;
+        {
+            let mut room_guard = lock_room(&room_arc)?;
+            let mut c = lock_client(&client)?;
+            match room_guard.users.get_mut(username) {
+                Some(u) => {
+                    u.hidden = !u.hidden;
+                    now_hidden = u.hidden;
+                }
+                None => {
+                    send_message_locked(&mut c, &"Error: user record missing".red().to_string())?;
+                    return Ok(CommandResult::Handled);
+                }
+            }
+            drop(room_guard);
 
-        if now_hidden {
-            send_success_locked(&mut c, "You are now hidden")?;
-        } else {
-            send_success_locked(&mut c, "You are no longer hidden")?;
+            if let Err(e) = save_rooms_to_disk(&rooms_map) {
+                send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
+                return Ok(CommandResult::Handled);
+            }
+
+            if now_hidden {
+                send_success_locked(&mut c, "You are now hidden")?;
+            } else {
+                send_success_locked(&mut c, "You are no longer hidden")?;
+            }
         }
     }
 
