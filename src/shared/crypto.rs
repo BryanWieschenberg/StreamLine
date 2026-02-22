@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::collections::HashMap;
 use std::fs::{self};
 use std::io::{self, Write};
@@ -38,7 +39,7 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
         let raw = match fs::read_to_string("data/keys.json") {
             Ok(content) => content,
             Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),
-            Err(e) => return Err(e.into())
+            Err(e) => return Err(e)
         };
         if raw.trim().is_empty() {
             HashMap::new()
@@ -64,17 +65,17 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
     }
 
     let priv_key = RsaPrivateKey::new(&mut OsRng, 1024)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("RSA gen failed: {e}")))?;
+        .map_err(|e| io::Error::other(format!("RSA gen failed: {e}")))?;
 
     let pub_key_der = priv_key
         .to_public_key()
         .to_public_key_der()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Public key encode failed: {e}")))?
+        .map_err(|e| io::Error::other(format!("Public key encode failed: {e}")))?
         .as_bytes()
         .to_vec();
     let priv_key_der = priv_key
         .to_pkcs8_der()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("PKCS8 encode failed: {e}")))?
+        .map_err(|e| io::Error::other(format!("PKCS8 encode failed: {e}")))?
         .as_bytes()
         .to_vec();
 
@@ -88,7 +89,7 @@ pub fn generate_or_load_keys(username: &str) -> io::Result<String> {
         PairJSON { pubkey: pub_b64.clone(), privkey: priv_b64 },
     );
     let json = serde_json::to_string_pretty(&map)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("JSON encode failed: {e}")))?;
+        .map_err(|e| io::Error::other(format!("JSON encode failed: {e}")))?;
     fs::write("data/keys.json", json)?;
     #[cfg(unix)]
     fs::set_permissions("data/keys.json", fs::Permissions::from_mode(0o600))?;

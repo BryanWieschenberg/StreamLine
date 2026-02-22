@@ -5,16 +5,16 @@ use std::sync::{Arc, Mutex};
 use std::{env, thread};
 use std::time::{SystemTime, Instant, Duration};
 use colored::Colorize;
-mod commands;
-use crate::commands::parser::{Command, parse_command};
-use crate::commands::dispatcher::{dispatch_command, CommandResult};
-use crate::commands::command_utils::{unix_timestamp};
-mod types;
-use crate::types::{Client, ClientState, Clients, PublicKeys, Room, Rooms};
-mod utils;
-use crate::utils::{check_mute, format_broadcast, lock_client, lock_clients, lock_room, lock_rooms};
+mod backend;
+mod shared;
 
-pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()> {
+use crate::backend::parser::{Command, parse_command};
+use crate::backend::dispatcher::{dispatch_command, CommandResult};
+use crate::backend::command_utils::{sync_room_members, unix_timestamp};
+use crate::shared::types::{Client, ClientState, Clients, PublicKeys, Room, Rooms};
+use crate::shared::utils::{check_mute, format_broadcast, lock_client, lock_clients, lock_room, lock_rooms};
+
+pub fn session_housekeeper(clients: Clients, rooms: Rooms, pubkeys: PublicKeys) -> std::io::Result<()> {
     loop {
         thread::sleep(Duration::from_secs(60));
         let now = SystemTime::now();
@@ -75,6 +75,7 @@ pub fn session_housekeeper(clients: Clients, rooms: Rooms) -> std::io::Result<()
                                 }
                             }
                         }
+                        let _ = sync_room_members(&rooms, &clients, &pubkeys, &room_name);
 
                         if let Err(e) = unix_timestamp(&rooms, &room_name, &user) {
                             eprintln!("Error updating last_seen for {user} in {room_name}: {e}");
@@ -179,6 +180,43 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                             }
                         };
 
+                        let (can_see_hidden, online_in_room) = {
+                            let rooms_map = match lock_rooms(&rooms) {
+                                Ok(m) => m,
+                                Err(_) => {
+                                    let mut client = lock_client(&client_arc)?;
+                                    writeln!(client.stream, "{}", "Failed to lock rooms".red())?;
+                                    continue;
+                                }
+                            };
+                            let room_arc = match rooms_map.get(&room_name) {
+                                Some(r) => Arc::clone(r),
+                                None => {
+                                    let mut client = lock_client(&client_arc)?;
+                                    writeln!(client.stream, "{}", format!("Room {room_name} not found").yellow())?;
+                                    continue;
+                                }
+                            };
+                            let room_guard = match lock_room(&room_arc) {
+                                Ok(g) => g,
+                                Err(_) => {
+                                    let mut client = lock_client(&client_arc)?;
+                                    writeln!(client.stream, "{}", "Failed to lock room".red())?;
+                                    continue;
+                                }
+                            };
+                            
+                            let role = room_guard.users.get(&username).map(|u| u.role.as_str()).unwrap_or("user");
+                            let can_see = role == "owner" || role == "admin";
+
+                            let mut online_visibility = HashMap::new();
+                            for uname in &room_guard.online_users {
+                                let is_hidden = room_guard.users.get(uname).map(|u| u.hidden).unwrap_or(false);
+                                online_visibility.insert(uname.clone(), is_hidden);
+                            }
+                            (can_see, online_visibility)
+                        };
+
                         let clients_map = lock_clients(&clients)?;
                         let pubkeys_map = match pubkeys.lock() {
                             Ok(map) => map,
@@ -190,111 +228,78 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                         };
 
                         let mut pairs = Vec::new();
-
                         let tokens: Vec<&str> = rest.trim().split_whitespace().collect();
 
                         match tokens.as_slice() {
                             ["ind", target] => {
                                 for (_, arc) in clients_map.iter() {
-                                    let client = match arc.lock() {
-                                        Ok(c) => c,
-                                        Err(e) => {
-                                            eprintln!("Failed to lock client: {e}");
-                                            continue;
+                                    if let Ok(client) = arc.try_lock() {
+                                        if let ClientState::InRoom { username: u, room: r, .. } = &client.state {
+                                            if u == target && r == &room_name {
+                                                let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
+                                                if is_hidden && !can_see_hidden {
+                                                    continue;
+                                                }
+                                                if client.ignore_list.contains(&username) {
+                                                    continue;
+                                                }
+                                                if let Some(key) = pubkeys_map.get(u) {
+                                                    let mut requester = lock_client(&client_arc)?;
+                                                    writeln!(requester.stream, "/members {u}:{key}")?;
+                                                }
+                                                break;
+                                            }
                                         }
-                                    };
-                                    let (u, r) = match &client.state {
-                                        ClientState::InRoom { username: u, room: r, .. } => (u, r),
-                                        _ => continue,
-                                    };
-
-                                    if u != target || r != &room_name {
-                                        continue;
                                     }
-
-                                    if client.ignore_list.contains(&username) {
-                                        continue;
-                                    }
-
-                                    let key_b64 = match pubkeys_map.get(u) {
-                                        Some(k) => k.clone(),
-                                        None => {
-                                            eprintln!("Public key for user '{}' not found", u);
-                                            continue;
-                                        }
-                                    };
-                                    let mut client = lock_client(&client_arc)?;
-                                    writeln!(client.stream, "/members {u}:{key_b64}")?;
-                                    break;
                                 }
                             }
 
                             ["normal"] => {
                                 for (_, arc) in clients_map.iter() {
-                                    let client = match arc.lock() {
-                                        Ok(c) => c,
-                                        Err(e) => {
-                                            eprintln!("Failed to lock client: {e}");
-                                            continue;
+                                    if let Ok(client) = arc.try_lock() {
+                                        if let ClientState::InRoom { username: u, room: r, .. } = &client.state {
+                                            if r == &room_name && u != &username {
+                                                let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
+                                                if is_hidden && !can_see_hidden {
+                                                    continue;
+                                                }
+                                                if client.ignore_list.contains(&username) {
+                                                    continue;
+                                                }
+                                                if let Some(key) = pubkeys_map.get(u) {
+                                                    pairs.push(format!("{u}:{key}"));
+                                                }
+                                            }
                                         }
-                                    };
-                                    let (u, r) = match &client.state {
-                                        ClientState::InRoom { username: u, room: r, .. } => (u, r),
-                                        _ => continue,
-                                    };
-
-                                    if r != &room_name || u == &username {
-                                        continue;
                                     }
-
-                                    if client.ignore_list.contains(&username) {
-                                        continue;
-                                    }
-
-                                    let Some(key_b64) = pubkeys_map.get(u).cloned() else {
-                                        eprintln!("No public key found for user '{}'", u);
-                                        continue;
-                                    };
-                                    pairs.push(format!("{u}:{key_b64}"));
                                 }
-
                                 let line = format!("/members {}", pairs.join(" "));
-                                let mut client = lock_client(&client_arc)?;
-                                writeln!(client.stream, "{line}")?;
+                                let mut requester = lock_client(&client_arc)?;
+                                writeln!(requester.stream, "{line}")?;
                             }
 
                             ["full"] => {
                                 for (_, arc) in clients_map.iter() {
-                                    let client = match arc.lock() {
-                                        Ok(c) => c,
-                                        Err(e) => {
-                                            eprintln!("Failed to lock client: {e}");
-                                            continue;
+                                    if let Ok(client) = arc.try_lock() {
+                                        if let ClientState::InRoom { username: u, room: r, .. } = &client.state {
+                                            if r == &room_name {
+                                                let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
+                                                if is_hidden && !can_see_hidden {
+                                                    continue;
+                                                }
+                                                if client.ignore_list.contains(&username) {
+                                                    continue;
+                                                }
+                                                if let Some(key) = pubkeys_map.get(u) {
+                                                    pairs.push(format!("{u}:{key}"));
+                                                }
+                                            }
                                         }
-                                    };
-                                    let (u, r) = match &client.state {
-                                        ClientState::InRoom { username: u, room: r, .. } => (u, r),
-                                        _ => continue,
-                                    };
-
-                                    if r != &room_name {
-                                        continue;
                                     }
-
-                                    if client.ignore_list.contains(&username) {
-                                        continue;
-                                    }
-
-                                    let Some(key_b64) = pubkeys_map.get(u).cloned() else {
-                                        eprintln!("No public key found for user '{}'", u);
-                                        continue;
-                                    };
-                                    pairs.push(format!("{u}:{key_b64}"));
                                 }
-
                                 let line = format!("/members {}", pairs.join(" "));
-                                let mut client = lock_client(&client_arc)?;
-                                writeln!(client.stream, "{line}")?;
+                                let mut requester = lock_client(&client_arc)?;
+                                writeln!(requester.stream, "{line}")?;
                             }
 
                             _ => {
@@ -393,7 +398,21 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
         match &client.state {
             ClientState::Guest => println!("Guest ({peer}) disconnected"),
             ClientState::LoggedIn { username } => println!("{username} ({peer}) disconnected"),
-            ClientState::InRoom { username, .. } => println!("{username} ({peer}) disconnected"),
+            ClientState::InRoom { username, room, .. } => {
+                println!("{username} ({peer}) disconnected from {room}");
+                let uname = username.clone();
+                let rname = room.clone();
+                {
+                    let rmap = lock_rooms(&rooms)?;
+                    if let Some(rarc) = rmap.get(&rname) {
+                        if let Ok(mut r) = rarc.lock() {
+                            r.online_users.retain(|u| u != &uname);
+                        }
+                    }
+                }
+                let _ = sync_room_members(&rooms, &clients, &pubkeys, &rname);
+                let _ = unix_timestamp(&rooms, &rname, &uname);
+            }
         }
     }
 
@@ -436,11 +455,12 @@ fn main() -> std::io::Result<()> {
     {
         let clients = Arc::clone(&clients);
         let rooms = Arc::clone(&rooms);
+        let pubkeys = Arc::clone(&pubkeys);
 
         thread::Builder::new()
             .name("session-housekeeper".into())
             .spawn(move || {
-                if let Err(e) = session_housekeeper(clients, rooms) {
+                if let Err(e) = session_housekeeper(clients, rooms, pubkeys) {
                     eprintln!("Thread for session housekeeping exited with error: {e}");
                 }
             })?;

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::collections::{HashMap, VecDeque};
 use std::net::{TcpStream, SocketAddr};
 use std::sync::{Arc, Mutex};

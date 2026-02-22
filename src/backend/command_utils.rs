@@ -5,12 +5,9 @@ use colored::Colorize;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use serde::Serialize;
-use serde_json::{Serializer};
-use serde_json::ser::PrettyFormatter;
-use crate::types::{Clients, Client, ClientState, Rooms, Room, Roles};
-use crate::commands::parser::Command;
-use crate::utils::{lock_client, lock_room, lock_rooms, lock_rooms_storage};
+use crate::shared::types::{Clients, Client, ClientState, Rooms, Roles, PublicKeys};
+use crate::backend::parser::Command;
+use crate::shared::utils::{lock_client, lock_clients, lock_room, lock_rooms, save_rooms_to_disk};
 
 pub static DESCRIPTIONS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     HashMap::from([
@@ -108,28 +105,7 @@ pub fn help_msg_inroom(extra_cmds: Vec<&str>) -> String {
     ordered_filtered.join("\n")
 }
 
-pub trait ColorizeExt {
-    fn truecolor_from_hex(self, hex: &str) -> colored::ColoredString;
-}
 
-impl ColorizeExt for &str {
-    fn truecolor_from_hex(self, hex: &str) -> colored::ColoredString {
-        self.to_string().truecolor_from_hex(hex)
-    }
-}
-
-impl<'a> ColorizeExt for String {
-    fn truecolor_from_hex(self, hex: &str) -> colored::ColoredString {
-        let hex = hex.trim_start_matches('#');
-        if hex.len() != 6 {
-            return self.normal();
-        }
-        let r = u8::from_str_radix(&hex[0..2], 16).map_or(255, |v| v);
-        let g = u8::from_str_radix(&hex[2..4], 16).map_or(255, |v| v);
-        let b = u8::from_str_radix(&hex[4..6], 16).map_or(255, |v| v);
-        self.truecolor(r, g, b)
-    }
-}
 
 pub fn generate_hash(input: &str) -> String {
     let mut hasher = Sha256::new();
@@ -173,58 +149,114 @@ pub fn check_role_permissions(role: &str, command: &str, roles: &Roles) -> bool 
     }
 }
 
-pub fn has_permission(cmd: &Command, client: Arc<Mutex<Client>>, rooms: &Rooms, username: &String, room: &String) -> io::Result<bool> {
+pub fn has_permission(cmd: &Command, client_arc: Arc<Mutex<Client>>, rooms: &Rooms, username: &String, room: &String) -> io::Result<bool> {
     let cmd_str = cmd.to_string();
 
     if cmd_str.is_empty() || !RESTRICTED_COMMANDS.contains(cmd_str.as_str()) {
         return Ok(true)
     }
 
+    let role = {
+        let client = lock_client(&client_arc)?;
+        let rooms_map = lock_rooms(rooms)?;
+        let room_arc = match rooms_map.get(room) {
+            Some(r) => Arc::clone(r),
+            None => {
+                writeln!(&client.stream, "{}", format!("Room {room} not found").yellow())?;
+                return Ok(false)
+            }
+        };
+
+        let room_guard = lock_room(&room_arc)?;
+        match room_guard.users.get(username) {
+            Some(u) => u.role.clone(),
+            None => {
+                writeln!(&client.stream, "{}", "Error: You are not registered in this room".red())?;
+                return Ok(false);
+            }
+        }
+    };
+
     let rooms_map = lock_rooms(rooms)?;
-    let room_arc = match rooms_map.get(room) {
-        Some(r) => Arc::clone(r),
-        None => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", format!("Room {} not found", room).yellow())?;
-            return Ok(false)
-        }
-    };
+    let room_arc = rooms_map.get(room).ok_or_else(|| io::Error::other("Room disappeared"))?;
+    let room_guard = lock_room(room_arc)?;
 
-    let room_guard = lock_room(&room_arc)?;
-    let role = match room_guard.users.get(username) {
-        Some(u) => u.role.as_str(),
-        None => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Error: You are not registered in this room".red())?;
-            return Ok(false);
-        }
-    };
-
-    if !check_role_permissions(role, cmd_str.as_str(), &room_guard.roles) {
-        let mut client = lock_client(&client)?;
-        writeln!(client.stream, "{}", "You don't have permission to run this command".red())?;
+    if !check_role_permissions(&role, cmd_str.as_str(), &room_guard.roles) {
+        let client = lock_client(&client_arc)?;
+        writeln!(&client.stream, "{}", "You don't have permission to run this command".red())?;
         return Ok(false)
     }
 
-    return Ok(true)
+    Ok(true)
 }
 
-pub fn save_rooms_to_disk(map: &HashMap<String, Arc<Mutex<Room>>>) -> std::io::Result<()> {
-    let _lock = lock_rooms_storage()?;
 
-    let mut snapshot = HashMap::new();
-    for (name, arc) in map.iter() {
-        if let Ok(room) = arc.lock() {
-            snapshot.insert(name.clone(), room.clone());
-        } else {
-            eprintln!("Failed to lock room '{}'", name);
+
+pub fn sync_room_members(rooms: &Rooms, clients: &Clients, pubkeys: &PublicKeys, room_name: &str) -> io::Result<()> {
+    let (online_users, visibility, user_roles) = {
+        let rooms_map = lock_rooms(rooms)?;
+        let room_arc = match rooms_map.get(room_name) {
+            Some(arc) => Arc::clone(arc),
+            None => return Ok(()),
+        };
+        let room_guard = lock_room(&room_arc)?;
+        let mut vis = HashMap::new();
+        let mut roles = HashMap::new();
+        for uname in &room_guard.online_users {
+            if let Some(udata) = room_guard.users.get(uname) {
+                vis.insert(uname.clone(), udata.hidden);
+                roles.insert(uname.clone(), udata.role.clone());
+            }
+        }
+        (room_guard.online_users.clone(), vis, roles)
+    };
+
+    let pkeys = {
+        let pk_guard = pubkeys.lock().map_err(|_| io::Error::other("Pubkeys lock poisoned"))?;
+        let mut map = HashMap::new();
+        for uname in &online_users {
+            if let Some(key) = pk_guard.get(uname) {
+                map.insert(uname.clone(), key.clone());
+            }
+        }
+        map
+    };
+
+    let client_arcs: Vec<Arc<Mutex<Client>>> = {
+        let clients_guard = lock_clients(clients)?;
+        clients_guard.values().cloned().collect()
+    };
+
+    for arc in client_arcs {
+        let mut c = lock_client(&arc)?;
+        if let ClientState::InRoom { username: recipient, room: rname, .. } = &c.state {
+            if rname != room_name {
+                continue;
+            }
+
+            let role = user_roles.get(recipient).map(|s| s.as_str()).unwrap_or("user");
+            let can_see_hidden = role == "owner" || role == "admin";
+
+            let mut pairs = Vec::new();
+            for uname in &online_users {
+                let is_hidden = visibility.get(uname).cloned().unwrap_or(false);
+                if is_hidden && !can_see_hidden {
+                    continue;
+                }
+                
+                if let Some(key) = pkeys.get(uname) {
+                    pairs.push(format!("{uname}:{key}"));
+                }
+            }
+
+            if pairs.is_empty() {
+                writeln!(c.stream, "/members")?;
+            } else {
+                writeln!(c.stream, "/members {}", pairs.join(" "))?;
+            }
+            let _ = c.stream.flush();
         }
     }
-    let file = std::fs::OpenOptions::new().create(true).write(true).truncate(true).open("data/rooms.json")?;
-    let mut writer = std::io::BufWriter::new(file);
-    let formatter = PrettyFormatter::with_indent(b"    ");
-    let mut ser = Serializer::with_formatter(&mut writer, formatter);
-    snapshot.serialize(&mut ser).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     Ok(())
 }

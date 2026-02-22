@@ -1,5 +1,5 @@
 use colored::*;
-use crate::commands::command_utils::{duration_format_passes};
+use crate::backend::command_utils::{duration_format_passes};
 
 impl ToString for Command {
     fn to_string(&self) -> String {
@@ -135,7 +135,7 @@ pub enum Command {
 }
 
 pub fn parse_command(input: &str) -> Command {
-    let mut tokens: Vec<&str> = input.trim().split_whitespace().collect();
+    let mut tokens: Vec<&str> = input.split_whitespace().collect();
     tokens[0] = &tokens[0][1..];
 
     match tokens.as_slice() {

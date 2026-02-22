@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::utils::{lock_client};
+use crate::shared::utils::{lock_client};
 
 pub mod guest;
 pub mod loggedin;
@@ -11,8 +11,8 @@ pub enum CommandResult {
     Stop,
 }
 
-use crate::commands::parser::Command;
-use crate::types::{Client, ClientState, Clients, PublicKeys, Rooms};
+use crate::backend::parser::Command;
+use crate::shared::types::{Client, ClientState, Clients, PublicKeys, Rooms};
 use std::io;
 
 pub fn dispatch_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, pubkeys: &PublicKeys) -> io::Result<CommandResult> {

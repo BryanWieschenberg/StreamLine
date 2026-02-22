@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -5,8 +6,50 @@ use std::io;
 use std::io::{Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 use colored::Colorize;
-use crate::types::{Client, ClientState, Clients, Room, Rooms, ROOMS_LOCK, USERS_LOCK};
-use crate::commands::command_utils::{save_rooms_to_disk, ColorizeExt};
+use crate::shared::types::{Client, ClientState, Clients, Room, Rooms, ROOMS_LOCK, USERS_LOCK};
+
+pub trait ColorizeExt {
+    fn truecolor_from_hex(self, hex: &str) -> colored::ColoredString;
+}
+
+impl ColorizeExt for &str {
+    fn truecolor_from_hex(self, hex: &str) -> colored::ColoredString {
+        self.to_string().truecolor_from_hex(hex)
+    }
+}
+
+impl ColorizeExt for String {
+    fn truecolor_from_hex(self, hex: &str) -> colored::ColoredString {
+        let hex = hex.trim_start_matches('#');
+        if hex.len() != 6 {
+            return self.normal();
+        }
+        let r = u8::from_str_radix(&hex[0..2], 16).map_or(255, |v| v);
+        let g = u8::from_str_radix(&hex[2..4], 16).map_or(255, |v| v);
+        let b = u8::from_str_radix(&hex[4..6], 16).map_or(255, |v| v);
+        self.truecolor(r, g, b)
+    }
+}
+
+pub fn save_rooms_to_disk(map: &HashMap<String, Arc<Mutex<Room>>>) -> std::io::Result<()> {
+    let _lock = lock_rooms_storage()?;
+
+    let mut snapshot = HashMap::new();
+    for (name, arc) in map.iter() {
+        if let Ok(room) = arc.lock() {
+            snapshot.insert(name.clone(), room.clone());
+        } else {
+            eprintln!("Failed to lock room '{name}'");
+        }
+    }
+    let file = std::fs::OpenOptions::new().create(true).write(true).truncate(true).open("data/rooms.json")?;
+    let mut writer = std::io::BufWriter::new(file);
+    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+    let mut ser = serde_json::Serializer::with_formatter(&mut writer, formatter);
+    serde::Serialize::serialize(&snapshot, &mut ser).map_err(io::Error::other)?;
+
+    Ok(())
+}
 
 pub fn broadcast_message(clients: &Clients, room_name: &str, sender: &str, msg: &str, include_sender: bool, bypass_ignores: bool) -> io::Result<()> {
     let client_arcs: Vec<Arc<Mutex<Client>>> =
@@ -145,41 +188,99 @@ pub fn format_broadcast(rooms: &Rooms, room_name: &str, username: &str) -> io::R
 pub fn lock_clients(clients: &Clients) -> std::io::Result<std::sync::MutexGuard<'_, HashMap<SocketAddr, Arc<Mutex<Client>>>>> {
     clients.lock().map_err(|e| {
         eprintln!("Failed to lock clients: {e}");
-        std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned")
+        std::io::Error::other("Lock poisoned")
     })
 }
 
 pub fn lock_client(client_arc: &Arc<Mutex<Client>>) -> std::io::Result<std::sync::MutexGuard<'_, Client>> {
     client_arc.lock().map_err(|e| {
         eprintln!("Failed to lock client: {e}");
-        std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned")
+        std::io::Error::other("Lock poisoned")
     })
 }
 
 pub fn lock_rooms(rooms: &Rooms) -> std::io::Result<std::sync::MutexGuard<'_, HashMap<String, Arc<Mutex<Room>>>>> {
     rooms.lock().map_err(|e| {
         eprintln!("Failed to lock rooms: {e}");
-        std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned")
+        std::io::Error::other("Lock poisoned")
     })
 }
 
 pub fn lock_room(room_arc: &Arc<Mutex<Room>>) -> std::io::Result<std::sync::MutexGuard<'_, Room>> {
     room_arc.lock().map_err(|e| {
         eprintln!("Failed to lock room: {e}");
-        std::io::Error::new(std::io::ErrorKind::Other, "Lock poisoned")
+        std::io::Error::other("Lock poisoned")
     })
 }
 
 pub fn lock_users_storage<'a>() -> io::Result<MutexGuard<'a, ()>> {
     USERS_LOCK.lock().map_err(|e| {
         eprintln!("Failed to lock users: {e}");
-        io::Error::new(io::ErrorKind::Other, "Error: Could not acquire user lock")
+        io::Error::other("Error: Could not acquire user lock")
     })
 }
 
 pub fn lock_rooms_storage<'a>() -> io::Result<MutexGuard<'a, ()>> {
     ROOMS_LOCK.lock().map_err(|e| {
         eprintln!("Failed to lock rooms: {e}");
-        io::Error::new(io::ErrorKind::Other, "Error: Could not acquire room lock")
+        io::Error::other("Error: Could not acquire room lock")
     })
+}
+
+pub fn load_json(path: &str) -> io::Result<serde_json::Value> {
+    let file = std::fs::File::open(path)?;
+    let reader = std::io::BufReader::new(file);
+    let json: serde_json::Value = serde_json::from_reader(reader)?;
+    Ok(json)
+}
+
+pub fn save_json(path: &str, data: &serde_json::Value) -> io::Result<()> {
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path)?;
+    let mut writer = std::io::BufWriter::new(file);
+    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
+    let mut ser = serde_json::Serializer::with_formatter(&mut writer, formatter);
+    serde::Serialize::serialize(data, &mut ser)?;
+    Ok(())
+}
+
+pub fn send_message(client_arc: &Arc<Mutex<Client>>, msg: &str) -> io::Result<()> {
+    let mut c = lock_client(client_arc)?;
+    writeln!(c.stream, "{msg}")?;
+    c.stream.flush()?;
+    Ok(())
+}
+
+pub fn send_message_locked(client: &mut Client, msg: &str) -> io::Result<()> {
+    writeln!(client.stream, "{msg}")?;
+    client.stream.flush()?;
+    Ok(())
+}
+
+pub fn send_error(client_arc: &Arc<Mutex<Client>>, msg: &str) -> io::Result<()> {
+    let mut c = lock_client(client_arc)?;
+    writeln!(c.stream, "{}", msg.red())?;
+    c.stream.flush()?;
+    Ok(())
+}
+
+pub fn send_error_locked(client: &mut Client, msg: &str) -> io::Result<()> {
+    writeln!(client.stream, "{}", msg.red())?;
+    client.stream.flush()?;
+    Ok(())
+}
+
+pub fn send_success(client_arc: &Arc<Mutex<Client>>, msg: &str) -> io::Result<()> {
+    let mut c = lock_client(client_arc)?;
+    writeln!(c.stream, "{}", msg.green())?;
+    c.stream.flush()?;
+    Ok(())
+}
+
+pub fn send_success_locked(client: &mut Client, msg: &str) -> io::Result<()> {
+    writeln!(client.stream, "{}", msg.green())?;
+    client.stream.flush()?;
+    Ok(())
 }

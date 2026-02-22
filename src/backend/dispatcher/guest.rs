@@ -1,37 +1,32 @@
 use std::io::{self, BufReader, Write};
 use std::time::Instant;
-use std::fs::{File, OpenOptions};
-use serde::Serialize;
-use serde_json::{Value, json, Serializer};
-use serde_json::ser::PrettyFormatter;
+use std::fs::File;
+use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use colored::*;
 
-use crate::commands::parser::Command;
-use crate::commands::command_utils::{help_msg_guest, generate_hash, is_user_logged_in};
-use crate::types::{Client, ClientState, Clients, Rooms};
-use crate::utils::{lock_client, lock_clients, lock_users_storage};
+use crate::backend::parser::Command;
+use crate::backend::command_utils::{help_msg_guest, generate_hash, is_user_logged_in};
+use crate::shared::types::{Client, ClientState, Clients, Rooms};
+use crate::shared::utils::{lock_client, lock_clients, lock_users_storage, load_json, save_json, send_message, send_error, send_success};
 use super::CommandResult;
 
 pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, _rooms: &Rooms) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}{}", help_msg_guest().bright_blue(), "\x1b[0m")?;
+            send_message(&client, &format!("{}{}", help_msg_guest().bright_blue(), "\x1b[0m"))?;
             Ok(CommandResult::Handled)
         }
 
         Command::Ping { start_time } => {
-            let mut client = lock_client(&client)?;
             if let Some(start_ms) = start_time {
-                writeln!(client.stream, "/PONG {}", start_ms)?;
+                send_message(&client, &format!("/PONG {start_ms}"))?;
             }
             Ok(CommandResult::Handled)
         }
 
         Command::PubKey { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Public keys are handled automatically when logging in".yellow())?;
+            send_message(&client, &"Public keys are handled automatically when logging in".yellow().to_string())?;
             Ok(CommandResult::Handled)
         }
 
@@ -42,7 +37,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             };
 
             {
-                let mut clients = lock_clients(&clients)?;
+                let mut clients = lock_clients(clients)?;
                 clients.remove(&addr);
             }
 
@@ -56,8 +51,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
         Command::SuperUsers | Command::SuperRename { .. } | Command::SuperExport { .. } | Command::SuperWhitelist | Command::SuperWhitelistToggle | Command::SuperWhitelistAdd { .. } | Command::SuperWhitelistRemove { .. } | Command::SuperLimit | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
         Command::ModInfo | Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must be in a room to perform this command".yellow())?;
+            send_message(&client, &"Must be in a room to perform this command".yellow().to_string())?;
             Ok(CommandResult::Handled)
         }
 
@@ -74,20 +68,16 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             }
 
             if password != confirm {
-                let mut client = lock_client(&client)?;
-                writeln!(client.stream, "{}", "Error: Passwords don't match".yellow())?;
+                send_message(&client, &"Error: Passwords don't match".yellow().to_string())?;
                 return Ok(CommandResult::Handled)
             }
 
             let _lock = lock_users_storage()?;
 
-            let file = File::open("data/users.json")?;
-            let reader = BufReader::new(file);
-            let mut users: Value = serde_json::from_reader(reader)?;
+            let mut users = load_json("data/users.json")?;
             
             if users.get(&username).is_some() {
-                let mut client = lock_client(&client)?;
-                writeln!(client.stream, "{}", "Error: Name is already taken".yellow())?;
+                send_message(&client, &"Error: Name is already taken".yellow().to_string())?;
                 return Ok(CommandResult::Handled);
             }
 
@@ -98,21 +88,13 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
                 "ignore": []
             });
 
-            let file = OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .open("data/users.json")?;
+            save_json("data/users.json", &users)?;
 
-            let mut writer = std::io::BufWriter::new(file);
-            let formatter = PrettyFormatter::with_indent(b"    ");
-            let mut ser = Serializer::with_formatter(&mut writer, formatter);
-            users.serialize(&mut ser)?;
+            let mut c = lock_client(&client)?;
+            c.state = ClientState::LoggedIn { username: username.clone() };
+            writeln!(c.stream, "{}", format!("/LOGIN_OK {}", username))?;
 
-            let mut client = lock_client(&client)?;
-            client.state = ClientState::LoggedIn { username: username.clone() };
-            writeln!(client.stream, "{}", format!("/LOGIN_OK {}", username))?;
-
-            writeln!(client.stream, "{}", format!("User Registered: {}", username).green())?;
+            writeln!(c.stream, "{}", format!("User Registered: {username}").green())?;
             Ok(CommandResult::Handled)
         }
 
@@ -129,24 +111,20 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             }
 
             if is_user_logged_in(clients, &username) {
-                let mut client = lock_client(&client)?;
-                writeln!(client.stream, "{}", format!("Error: {} is already logged in", username).yellow())?;
+                send_message(&client, &format!("Error: {username} is already logged in").yellow().to_string())?;
                 return Ok(CommandResult::Handled);
             }
 
             let _lock = lock_users_storage()?;
 
-            let file = File::open("data/users.json")?;
-            let reader = BufReader::new(file);
-            let users: Value = serde_json::from_reader(reader)?;
+            let users = load_json("data/users.json")?;
 
             match users.get(&username) {
                 Some(user_obj) => {
                     let stored_hash = match user_obj.get("password").and_then(|v| v.as_str()) {
                         Some(hash) => hash,
                         None => {
-                            let mut client = lock_client(&client)?;
-                            writeln!(client.stream, "{}", "Error: Malformed user data".yellow())?;
+                            send_message(&client, &"Error: Malformed user data".yellow().to_string())?;
                             return Ok(CommandResult::Handled);
                         }
                     };
@@ -158,15 +136,13 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
                             .map_or_else(Vec::new, |arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
                         writeln!(client.stream, "{}", format!("/LOGIN_OK {}", username))?;
 
-                        writeln!(client.stream, "{}", format!("Logged in as: {}", username).green())?;
+                        writeln!(client.stream, "{}", format!("Logged in as: {username}").green())?;
                     } else {
-                        let mut client = lock_client(&client)?;
-                        writeln!(client.stream, "{}", "Error: Incorrect password".yellow())?;
+                        send_message(&client, &"Error: Incorrect password".yellow().to_string())?;
                     }
                 }
                 None => {
-                    let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", "Error: Username not found".yellow())?;
+                    send_message(&client, &"Error: Username not found".yellow().to_string())?;
                 }
             }
 
@@ -174,25 +150,23 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
         }
 
         Command::AccountLogout | Command::AccountEditUsername { .. } | Command::AccountEditPassword { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "You are not currently logged in".yellow())?;
+            send_message(&client, &"You are not currently logged in".yellow().to_string())?;
             Ok(CommandResult::Handled)
         }
 
         Command::AccountImport { filename } => {
             let safe_filename = if !filename.ends_with(".json") {
-                format!("{}.json", filename)
+                format!("{filename}.json")
             }
             else {
                 filename
             };
 
-            let import_path = format!("data/vault/users/{}", safe_filename);
+            let import_path = format!("data/vault/users/{safe_filename}");
             let import_file = match File::open(&import_path) {
                 Ok(file) => file,
                 Err(_) => {
-                    let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", format!("Error: Could not open {}", import_path).yellow())?;
+                    send_message(&client, &format!("Error: Could not open {import_path}").yellow().to_string())?;
                     return Ok(CommandResult::Handled);
                 }
             };
@@ -201,8 +175,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             let import_user: Value = match serde_json::from_reader(import_reader) {
                 Ok(data) => data,
                 Err(_) => {
-                    let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", "Error: Invalid JSON format in import file".yellow())?;
+                    send_message(&client, &"Error: Invalid JSON format in import file".yellow().to_string())?;
                     return Ok(CommandResult::Handled);
                 }
             };
@@ -210,74 +183,54 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             let (username, user_data) = match import_user.as_object().and_then(|obj| obj.iter().next()) {
                 Some((u, data)) => (u.clone(), data.clone()),
                 None => {
-                    let mut client = lock_client(&client)?;
-                    writeln!(client.stream, "{}", "Error: Import file is empty or malformed".yellow())?;
+                    send_message(&client, &"Error: Import file is empty or malformed".yellow().to_string())?;
                     return Ok(CommandResult::Handled);
                 }
             };
 
             let _lock = lock_users_storage()?;
-
-            let file = File::open("data/users.json")?;
-            let reader = BufReader::new(file);
-            let mut users: Value = serde_json::from_reader(reader)?;
+            let mut users = load_json("data/users.json")?;
 
             if users.get(&username).is_some() {
-                let mut client = lock_client(&client)?;
-                writeln!(client.stream, "{}", format!("Error: User {} already exists", username).yellow())?;
+                send_message(&client, &format!("Error: User {username} already exists").yellow().to_string())?;
                 return Ok(CommandResult::Handled);
             }
 
             users[&username] = user_data;
 
-            let file = OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .open("data/users.json")?;
+            save_json("data/users.json", &users)?;
 
-            let mut writer = std::io::BufWriter::new(file);
-            let formatter = PrettyFormatter::with_indent(b"    ");
-            let mut ser = Serializer::with_formatter(&mut writer, formatter);
-            users.serialize(&mut ser)?;
-
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", format!("Imported user: {}", username).green())?;
+            send_success(&client, &format!("Imported user: {username}"))?;
             Ok(CommandResult::Handled)
         }
 
         Command::AccountExport { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Currently a guest, please register or log into an account to export account data".green())?;
+            send_success(&client, "Currently a guest, please register or log into an account to export account data")?;
             Ok(CommandResult::Handled)
         }
 
         Command::AccountDelete { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Currently a guest, cannot delete an account".green())?;
+            send_success(&client, "Currently a guest, cannot delete an account")?;
             Ok(CommandResult::Handled)
         }
 
         Command::Account => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must register or log into an account to join a room".green())?;
+            send_success(&client, "Must register or log into an account to join a room")?;
             Ok(CommandResult::Handled)
         }
 
         Command::RoomList | Command::RoomCreate { .. } | Command::RoomJoin { .. } | Command::RoomImport { .. } | Command::RoomDelete { .. } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Must log in to perform this command".yellow())?;
+            send_message(&client, &"Must log in to perform this command".yellow().to_string())?;
             Ok(CommandResult::Handled)
         }
 
         Command::InvalidSyntax {err_msg } => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", err_msg)?;
+            send_message(&client, &err_msg)?;
             Ok(CommandResult::Handled)
         }
 
         Command::Unavailable => {
-            let mut client = lock_client(&client)?;
-            writeln!(client.stream, "{}", "Command not available, use /help to see available commands".red())?;
+            send_error(&client, "Command not available, use /help to see available commands")?;
             Ok(CommandResult::Handled)
         }
     }
