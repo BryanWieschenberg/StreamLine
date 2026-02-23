@@ -108,13 +108,13 @@ StreamLine is engineered for high-throughput, ultra-low-latency communication. T
 
 ### Always-Allowed Commands
 
-| Command                                                                                                                                            | Category  | Description                                          |
-| :------------------------------------------------------------------------------------------------------------------------------------------------- | :-------- | :--------------------------------------------------- |
-| `/help`, `/clear`, `/quit`, `/ping`                                                                                                                | Universal | General utility and diagnostics                      |
-| **`/account`**, `/account register`, `/account login`, `/account logout`, `/account edit`, `/account import`, `/account export`, `/account delete` | Account   | Registration, authentication, and account management |
-| **`/room`**, `/room list`, `/room join`, `/room create`, `/room import`, `/room delete`                                                            | Room      | Room discovery and management                        |
-| **`/ignore`**, `/ignore list`, `/ignore add`, `/ignore remove`                                                                                     | Ignore    | Block and unblock messages from users                |
-| `/leave`, `/status`                                                                                                                                | In-Room   | Room navigation and session info                     |
+| Command                                                                                                                                    | Category  | Description                                          |
+| :----------------------------------------------------------------------------------------------------------------------------------------- | :-------- | :--------------------------------------------------- |
+| `help`, `clear`, `quit`, `ping`                                                                                                            | Universal | General utility and diagnostics                      |
+| **`account`**, `account.register`, `account.login`, `account.logout`, `account.edit`, `account.import`, `account.export`, `account.delete` | Account   | Registration, authentication, and account management |
+| **`room`**, `room.list`, `room.join`, `room.create`, `room.import`, `room.delete`                                                          | Room      | Room discovery and management                        |
+| **`ignore`**, `ignore.list`, `ignore.add`, `ignore remove`                                                                                 | Ignore    | Block and unblock messages from users                |
+| `leave`, `status`                                                                                                                          | In-Room   | Room navigation and session info                     |
 
 ### Addable/Revocable Commands
 
