@@ -8,10 +8,10 @@ use colored::*;
 use crate::backend::parser::Command;
 use crate::backend::command_utils::{help_msg_guest, generate_hash, is_user_logged_in};
 use crate::shared::types::{Client, ClientState, Clients, Rooms};
-use crate::shared::utils::{lock_client, lock_clients, lock_users_storage, load_json, save_json, send_message, send_error, send_success};
+use crate::shared::utils::{lock_client, lock_clients, lock_users_storage, load_json, save_json, send_message, send_error, send_success, log_event, broadcast_room_list};
 use super::CommandResult;
 
-pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, _rooms: &Rooms) -> io::Result<CommandResult> {
+pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms) -> io::Result<CommandResult> {
     match cmd {
         Command::Help => {
             send_message(&client, &format!("{}{}", help_msg_guest().bright_blue(), "\x1b[0m"))?;
@@ -91,10 +91,14 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             save_json("data/users.json", &users)?;
 
             let mut c = lock_client(&client)?;
+            let peer = c.addr;
             c.state = ClientState::LoggedIn { username: username.clone() };
             writeln!(c.stream, "{}", format!("/LOGIN_OK {}", username))?;
 
             writeln!(c.stream, "{}", format!("User Registered: {username}").green())?;
+            drop(c);
+            log_event(&peer, Some(&username), None, "Logged in");
+            let _ = broadcast_room_list(clients, rooms, &username);
             Ok(CommandResult::Handled)
         }
 
@@ -130,6 +134,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
                     };
                     if generate_hash(&password) == stored_hash {
                         let mut client = lock_client(&client)?;
+                        let peer = client.addr;
                         client.state = ClientState::LoggedIn { username: username.clone() };
                         client.ignore_list = user_obj.get("ignore")
                             .and_then(|v| v.as_array())
@@ -137,6 +142,9 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
                         writeln!(client.stream, "{}", format!("/LOGIN_OK {}", username))?;
 
                         writeln!(client.stream, "{}", format!("Logged in as: {username}").green())?;
+                        drop(client);
+                        log_event(&peer, Some(&username), None, "Logged in");
+                        let _ = broadcast_room_list(clients, rooms, &username);
                     } else {
                         send_message(&client, &"Error: Incorrect password".yellow().to_string())?;
                     }

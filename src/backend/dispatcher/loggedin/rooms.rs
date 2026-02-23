@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::shared::types::{Client, ClientState, Room, RoomUser, Rooms};
-use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room, lock_rooms_storage, send_success, send_error, send_message, load_json, save_json, send_error_locked, send_success_locked};
+use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room, lock_rooms_storage, send_success, send_error, send_message, load_json, save_json, send_error_locked, send_success_locked, log_event, broadcast_user_list, broadcast_room_list_to_all};
 use crate::backend::command_utils::{sync_room_members, sync_user_commands};
 use crate::backend::dispatcher::CommandResult;
 use crate::shared::types::{Clients, PublicKeys};
@@ -43,7 +43,7 @@ pub fn handle_room_list(client: Arc<Mutex<Client>>, rooms: &Rooms, username: &St
     Ok(CommandResult::Handled)
 }
 
-pub fn handle_room_create(client: Arc<Mutex<Client>>, rooms: &Rooms, username: &String, name: &String, whitelist: bool) -> io::Result<CommandResult> {
+pub fn handle_room_create(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, name: &String, whitelist: bool) -> io::Result<CommandResult> {
     let id_exists = {
         let _c = lock_client(&client)?;
         let rooms_map = lock_rooms(rooms)?;
@@ -126,6 +126,8 @@ pub fn handle_room_create(client: Arc<Mutex<Client>>, rooms: &Rooms, username: &
     };
 
     rooms_map.insert(name.clone(), Arc::new(Mutex::new(room_obj)));
+    drop(rooms_map);
+    let _ = broadcast_room_list_to_all(clients, rooms);
 
     if whitelist {
         send_success(&client, &format!("Whitelisted room {name} created successfully"))?;
@@ -279,6 +281,7 @@ pub fn handle_room_join(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &R
         room.online_users.push(username.clone());
     }
 
+    let peer = c.addr;
     c.state = ClientState::InRoom {
         username: username.clone(),
         room: name.clone(),
@@ -299,8 +302,11 @@ pub fn handle_room_join(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &R
     send_success_locked(&mut c, &format!("Joined room: {name}"))?;
     drop(room);
     drop(c);
+    log_event(&peer, Some(username), Some(name), &format!("Joined room {}", name));
     let _ = sync_user_commands(&client, rooms, username, name);
     let _ = sync_room_members(rooms, clients, pubkeys, name);
+    let _ = broadcast_user_list(clients, rooms, name);
+    let _ = broadcast_room_list_to_all(clients, rooms);
 
     Ok(CommandResult::Handled)
 }
@@ -463,6 +469,12 @@ pub fn handle_room_delete(client: Arc<Mutex<Client>>, clients: &Clients, rooms: 
         }
     }
 
+    drop(_lock);
+    drop(rooms_map);
+
     send_success(&client, &format!("Room {name} deleted successfully"))?;
+    
+    let _ = broadcast_room_list_to_all(clients, rooms);
+    
     Ok(CommandResult::Handled)
 }

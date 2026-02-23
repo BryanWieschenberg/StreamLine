@@ -11,7 +11,7 @@ use colored::*;
 use crate::backend::parser::Command;
 use crate::backend::command_utils::{help_msg_inroom, has_permission, unix_timestamp, sync_room_members};
 use crate::shared::types::{Client, ClientState, Clients, PublicKeys, Rooms};
-use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room};
+use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room, log_event, broadcast_user_list};
 use super::CommandResult;
 
 pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, username: &String, room: &String, pubkeys: &PublicKeys) -> io::Result<CommandResult> {
@@ -112,11 +112,14 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
                 eprintln!("Error updating last_seen for {username} in {room}: {e}");
             }
             let mut c = lock_client(&client)?;
+            let peer = c.addr;
             c.state = ClientState::LoggedIn {
                 username: username.clone()
             };
             writeln!(c.stream, "{}", format!("/LOBBY_STATE"))?;
             writeln!(c.stream, "{}", format!("You have left {room}").green())?;
+            log_event(&peer, Some(username), Some(room), &format!("Left room {}", room));
+            let _ = broadcast_user_list(clients, rooms, room);
             Ok(CommandResult::Handled)
         }
         Command::Status => {
@@ -136,10 +139,15 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
             writeln!(c.stream, "{}", format!("Room: {} | Role: {} | Online: {}", room, role, online.len()).cyan())?;
             Ok(CommandResult::Handled)
         }
-        Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } => {
+        Command::IgnoreList => {
             crate::backend::dispatcher::loggedin::loggedin_command(cmd, client, clients, rooms, username, pubkeys)
         }
-        Command::AFK => messaging::handle_afk(client, rooms, username, room),
+        Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } => {
+            let res = crate::backend::dispatcher::loggedin::loggedin_command(cmd, client, clients, rooms, username, pubkeys)?;
+            let _ = sync_room_members(rooms, clients, pubkeys, room);
+            Ok(res)
+        }
+        Command::AFK => messaging::handle_afk(client, clients, rooms, username, room),
         Command::DM { recipient, message } => messaging::handle_dm(client, clients, rooms, username, room, &recipient, &message),
         Command::Me { action } => messaging::handle_me(client, clients, rooms, username, room, &action),
         Command::Seen { username: target } => messaging::handle_seen(client, rooms, room, &target),
@@ -154,7 +162,7 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         Command::SuperExport { filename } => superuser::handle_super_export(client, rooms, room, &filename),
         Command::SuperWhitelist => superuser::handle_super_whitelist(client, rooms, room),
         Command::SuperWhitelistToggle => superuser::handle_super_whitelist_toggle(client, clients, rooms, room),
-        Command::SuperWhitelistAdd { users } => superuser::handle_super_whitelist_add(client, rooms, room, &users),
+        Command::SuperWhitelistAdd { users } => superuser::handle_super_whitelist_add(client, clients, rooms, room, &users),
         Command::SuperWhitelistRemove { users } => superuser::handle_super_whitelist_remove(client, clients, rooms, room, &users),
         Command::SuperLimit => superuser::handle_super_limit(client, rooms, room),
         Command::SuperLimitRate { limit } => superuser::handle_super_limit_rate(client, rooms, room, limit),
@@ -163,10 +171,10 @@ pub fn inroom_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Client
         Command::SuperRolesAdd { role, commands } => superuser_roles::handle_super_roles_add(client, clients, rooms, room, &role, &commands),
         Command::SuperRolesRevoke { role, commands } => superuser_roles::handle_super_roles_revoke(client, clients, rooms, room, &role, &commands),
         Command::SuperRolesAssign { role, users } => superuser_roles::handle_super_roles_assign(client, clients, rooms, room, &role, &users),
-        Command::SuperRolesRecolor { role, color } => superuser_roles::handle_super_roles_recolor(client, rooms, room, &role, &color),
+        Command::SuperRolesRecolor { role, color } => superuser_roles::handle_super_roles_recolor(client, clients, rooms, room, &role, &color),
         Command::Users => user::handle_users(client, rooms, room),
-        Command::UsersRename { name } => user::handle_users_rename(client, rooms, room, username, &name),
-        Command::UsersRecolor { color } => user::handle_users_recolor(client, rooms, room, username, &color),
+        Command::UsersRename { name } => user::handle_users_rename(client, clients, rooms, pubkeys, room, username, &name),
+        Command::UsersRecolor { color } => user::handle_users_recolor(client, clients, rooms, pubkeys, room, username, &color),
         Command::UsersHide => user::handle_users_hide(client, clients, rooms, pubkeys, username, room),
         Command::ModInfo => moderation::handle_mod_info(client, rooms, room),
         Command::ModKick { username: target, reason } => moderation::handle_mod_kick(client, clients, rooms, pubkeys, username, room, &target, reason),

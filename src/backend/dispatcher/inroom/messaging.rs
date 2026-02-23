@@ -4,16 +4,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use colored::*;
 
 use crate::shared::types::{Client, ClientState, Clients, Rooms};
-use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room, check_mute, send_error, send_message, send_success, broadcast_message};
+use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room, check_mute, send_error, send_message, send_success, broadcast_message, broadcast_user_list};
 use crate::backend::dispatcher::CommandResult;
 
-pub fn handle_afk(client: Arc<Mutex<Client>>, _rooms: &Rooms, _username: &String, _room: &String) -> io::Result<CommandResult> {
+pub fn handle_afk(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, _username: &String, room: &String) -> io::Result<CommandResult> {
     let mut c = lock_client(&client)?;
     if let ClientState::InRoom { is_afk, .. } = &mut c.state {
         *is_afk = true;
     }
     use std::io::Write;
     writeln!(c.stream, "{}", "You are now set as AFK".yellow())?;
+    drop(c);
+    let _ = broadcast_user_list(clients, rooms, room);
     Ok(CommandResult::Handled)
 }
 

@@ -284,3 +284,133 @@ pub fn send_success_locked(client: &mut Client, msg: &str) -> io::Result<()> {
     client.stream.flush()?;
     Ok(())
 }
+
+pub fn log_event(peer: &SocketAddr, username: Option<&str>, room: Option<&str>, action: &str) {
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let user_display = username.unwrap_or("Guest");
+    let room_display = room.map(|r| format!(" ({})", r)).unwrap_or_default();
+    println!("[{}] ({}) {}{} - {}", timestamp, peer, user_display, room_display, action);
+}
+
+pub fn broadcast_room_list(clients: &Clients, rooms: &Rooms, username: &str) -> io::Result<()> {
+    let rooms_map = lock_rooms(rooms)?;
+    let mut visible_rooms = Vec::new();
+    
+    for (room_name, room_arc) in rooms_map.iter() {
+        if let Ok(room) = room_arc.lock() {
+            if !room.whitelist_enabled || room.whitelist.contains(&username.to_string()) {
+                let count = room.online_users.len();
+                visible_rooms.push((room_name.clone(), count));
+            }
+        }
+    }
+    
+    drop(rooms_map);
+    
+    let rooms_str = visible_rooms.iter()
+        .map(|(name, count)| format!("{}:{}", name, count))
+        .collect::<Vec<_>>()
+        .join(" ");
+    
+    let clients_map = lock_clients(clients)?;
+    for client_arc in clients_map.values() {
+        if let Ok(mut c) = client_arc.try_lock() {
+            match &c.state {
+                ClientState::LoggedIn { username: u } if u == username => {
+                    let _ = writeln!(c.stream, "/ROOMS {}", rooms_str);
+                }
+                ClientState::Guest => {}
+                _ => {}
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+pub fn broadcast_room_list_to_all(clients: &Clients, rooms: &Rooms) -> io::Result<()> {
+    let clients_map = lock_clients(clients)?;
+    let logged_in_users: Vec<String> = clients_map.values()
+        .filter_map(|arc| {
+            arc.lock().ok().and_then(|c| {
+                if let ClientState::LoggedIn { username: u } = &c.state {
+                    Some(u.clone())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect();
+    drop(clients_map);
+    
+    for username in logged_in_users {
+        let _ = broadcast_room_list(clients, rooms, &username);
+    }
+    
+    Ok(())
+}
+
+pub fn broadcast_user_list(clients: &Clients, rooms: &Rooms, room_name: &str) -> io::Result<()> {
+    let visible_usernames: Vec<String> = {
+        let rooms_map = lock_rooms(rooms)?;
+        let room_arc = match rooms_map.get(room_name) {
+            Some(r) => Arc::clone(r),
+            None => return Ok(()),
+        };
+        
+        let room = lock_room(&room_arc)?;
+        let mut usernames = Vec::new();
+        
+        for online_user in &room.online_users {
+            if let Some(user_info) = room.users.get(online_user) {
+                if !user_info.hidden {
+                    let clients_map = lock_clients(clients)?;
+                    let mut is_afk = false;
+                    for client_arc in clients_map.values() {
+                        if let Ok(c) = client_arc.try_lock() {
+                            if let ClientState::InRoom { username: u, room: r, is_afk: afk, .. } = &c.state {
+                                if u == online_user && r == room_name {
+                                    is_afk = *afk;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    drop(clients_map);
+                    
+                    if !is_afk {
+                        usernames.push(online_user.clone());
+                    }
+                }
+            }
+        }
+        
+        usernames
+    };
+    
+    let mut visible_users = Vec::new();
+    for username in &visible_usernames {
+        let (role_prefix, display_name) = format_broadcast(rooms, room_name, username)?;
+        let formatted = if role_prefix.is_empty() {
+            display_name
+        } else {
+            format!("{} {}", role_prefix, display_name)
+        };
+        visible_users.push(formatted);
+    }
+    
+    let users_str = visible_users.join("\x1F");
+    
+    let clients_map = lock_clients(clients)?;
+    for client_arc in clients_map.values() {
+        if let Ok(mut c) = client_arc.try_lock() {
+            if let ClientState::InRoom { room: r, .. } = &c.state {
+                if r == room_name {
+                    let _ = writeln!(c.stream, "/USERS {}", users_str);
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}

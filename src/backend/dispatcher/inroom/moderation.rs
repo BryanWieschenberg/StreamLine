@@ -5,7 +5,7 @@ use colored::*;
 
 use crate::backend::command_utils::{parse_duration, sync_room_members};
 use crate::shared::types::{Client, ClientState, Clients, RoomUser, Rooms, PublicKeys};
-use crate::shared::utils::{lock_client, lock_clients, lock_room, lock_rooms, save_rooms_to_disk, send_message_locked, send_error_locked, send_success_locked};
+use crate::shared::utils::{lock_client, lock_clients, lock_room, lock_rooms, save_rooms_to_disk, send_message_locked, send_error_locked, send_success_locked, log_event, broadcast_user_list};
 use crate::backend::dispatcher::CommandResult;
 
 pub fn role_rank(role: &str) -> u8 {
@@ -98,7 +98,7 @@ pub fn handle_mod_info(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String)
                             let rem = rec.mute_stamp.saturating_add(rec.mute_length) - now;
                             let d = rem / 86_400;
                             let h = (rem % 86_400) / 3_600;
-                            let m = (rem % 3_3600) / 60;
+                            let m = (rem % 3_600) / 60;
                             let s = rem % 60;
                             format!("{d}d {h}h {m}m {s}s left")
                         };
@@ -141,6 +141,7 @@ pub fn handle_mod_info(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String)
 
 pub fn handle_mod_kick(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, pubkeys: &PublicKeys, username: &String, room: &String, target: &String, reason: String) -> io::Result<CommandResult> {
     let mut kicked = false;
+    let mut target_peer: Option<std::net::SocketAddr> = None;
 
     {
         let rooms_map = lock_rooms(rooms)?;
@@ -186,6 +187,7 @@ pub fn handle_mod_kick(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Ro
                 if let Ok(mut target_c) = c_arc.try_lock() {
                     if let ClientState::InRoom { username: u, room: rnm, .. } = &target_c.state {
                         if u == target && rnm == room {
+                            target_peer = Some(target_c.addr);
                             let msg = if reason.trim().is_empty() {
                                 format!("You have been kicked from {room}")
                             } else {
@@ -216,12 +218,16 @@ pub fn handle_mod_kick(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Ro
         } else {
             send_success_locked(&mut c, &format!("Kicked {target}: {reason}"))?;
         }
+        if let Some(peer) = target_peer {
+            log_event(&peer, Some(target), Some(room), &format!("Kicked from room {}", room));
+        }
     } else {
         send_message_locked(&mut c, &format!("Failed to kick {target}").yellow().to_string())?;
     }
     drop(c);
     
     let _ = sync_room_members(rooms, clients, pubkeys, room);
+    let _ = broadcast_user_list(clients, rooms, room);
     Ok(CommandResult::Handled)
 }
 
@@ -322,6 +328,7 @@ pub fn handle_mod_ban(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Roo
     drop(c);
 
     let _ = sync_room_members(rooms, clients, pubkeys, room);
+    let _ = broadcast_user_list(clients, rooms, room);
     Ok(CommandResult::Handled)
 }
 

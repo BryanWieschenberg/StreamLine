@@ -55,11 +55,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = App::new();
 
     app.push("Welcome to StreamLine!".into());
-    app.push("  /account register <user> <pass> <confirm>  — create account".into());
-    app.push("  /account login <user> <pass>              — sign in".into());
-    app.push("  /room create <name>  ·  /room join <name> — rooms".into());
-    app.push("  /help                                     — all commands".into());
-    app.push("  [Tab]  autocomplete commands & @usernames".into());
+    app.push("  /account register <username> <password> <confirm>    - Create an account".into());
+    app.push("  /account login <username> <password>                 - Sign in".into());
+    app.push("  /room list · /room create <name> · /room join <name> - See, create, or join a room".into());
+    app.push("  /help                                                - See all available commands".into());
+    app.push("  [Tab] autocomplete commands and @usernames".into());
 
     let (tx, rx) = mpsc::channel::<AppMessage>();
     let tx_clone = tx.clone();

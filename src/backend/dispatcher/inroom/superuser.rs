@@ -7,7 +7,7 @@ use std::fs::OpenOptions;
 use colored::*;
 
 use crate::shared::types::{Client, ClientState, Clients, Rooms};
-use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room, send_success, send_error, send_message, save_rooms_to_disk, ColorizeExt, send_message_locked, send_error_locked, send_success_locked};
+use crate::shared::utils::{lock_client, lock_clients, lock_rooms, lock_room, send_success, send_error, send_message, save_rooms_to_disk, ColorizeExt, send_message_locked, send_error_locked, send_success_locked, broadcast_room_list_to_all};
 use crate::backend::dispatcher::CommandResult;
 
 pub fn handle_super_users(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, room: &String) -> io::Result<CommandResult> {
@@ -250,13 +250,18 @@ pub fn handle_super_whitelist_toggle(client: Arc<Mutex<Client>>, clients: &Clien
         let enabled = room_guard.whitelist_enabled;
         let wl = room_guard.whitelist.clone();
         drop(room_guard);
+        (enabled, wl)
+    };
 
-        if let Err(e) = save_rooms_to_disk(&rooms_map) {
+    drop(rooms_map);
+
+    {
+        let fresh_map = lock_rooms(rooms)?;
+        if let Err(e) = save_rooms_to_disk(&fresh_map) {
             let mut c = lock_client(&client)?;
             send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
             return Ok(CommandResult::Handled);
         }
-        (enabled, wl)
     };
 
     if enabled_now {
@@ -293,11 +298,14 @@ pub fn handle_super_whitelist_toggle(client: Arc<Mutex<Client>>, clients: &Clien
     } else {
         send_success_locked(&mut c, "Whitelist is now DISABLED")?;
     }
+    drop(c);
+
+    let _ = broadcast_room_list_to_all(clients, rooms);
 
     Ok(CommandResult::Handled)
 }
 
-pub fn handle_super_whitelist_add(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String, users: &String) -> io::Result<CommandResult> {
+pub fn handle_super_whitelist_add(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, room: &String, users: &String) -> io::Result<CommandResult> {
     let rooms_map = lock_rooms(rooms)?;
     let mut c = lock_client(&client)?;
     let room_arc = match rooms_map.get(room) {
@@ -324,9 +332,18 @@ pub fn handle_super_whitelist_add(client: Arc<Mutex<Client>>, rooms: &Rooms, roo
     }
 
     if added_any {
-        if let Err(e) = save_rooms_to_disk(&rooms_map) {
-            send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
+        drop(c);
+        drop(rooms_map);
+
+        {
+            let fresh_map = lock_rooms(rooms)?;
+            let mut c = lock_client(&client)?;
+            if let Err(e) = save_rooms_to_disk(&fresh_map) {
+                send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
+            }
         }
+
+        let _ = broadcast_room_list_to_all(clients, rooms);
     }
 
     Ok(CommandResult::Handled)
@@ -363,12 +380,26 @@ pub fn handle_super_whitelist_remove(client: Arc<Mutex<Client>>, clients: &Clien
     };
 
     if removed_any {
-        if let Err(e) = save_rooms_to_disk(&rooms_map) {
-            send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
+        drop(c);
+        drop(rooms_map);
+
+        {
+            let fresh_map = lock_rooms(rooms)?;
+            let mut c = lock_client(&client)?;
+            if let Err(e) = save_rooms_to_disk(&fresh_map) {
+                send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
+            }
         }
 
         if whitelist_enabled {
-            drop(c);
+            let room_arc = {
+                let fresh_map = lock_rooms(rooms)?;
+                match fresh_map.get(room) {
+                    Some(r) => Arc::clone(r),
+                    None => return Ok(CommandResult::Handled),
+                }
+            };
+
             let clients_map = lock_clients(clients)?;
             for c_arc in clients_map.values() {
                 if let Ok(mut target_c) = c_arc.try_lock() {
@@ -395,6 +426,8 @@ pub fn handle_super_whitelist_remove(client: Arc<Mutex<Client>>, clients: &Clien
                 }
             }
         }
+
+        let _ = broadcast_room_list_to_all(clients, rooms);
     }
 
     Ok(CommandResult::Handled)

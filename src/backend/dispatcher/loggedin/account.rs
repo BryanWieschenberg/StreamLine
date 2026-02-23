@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::shared::types::{Client, ClientState, PublicKeys};
-use crate::shared::utils::{lock_client, lock_users_storage, load_json, save_json, send_error, send_success, send_error_locked, send_message_locked, send_success_locked};
+use crate::shared::utils::{lock_client, lock_users_storage, load_json, save_json, send_error, send_success, send_error_locked, send_message_locked, send_success_locked, log_event};
 use crate::backend::dispatcher::CommandResult;
 use crate::backend::command_utils::generate_hash;
 
@@ -22,9 +22,11 @@ pub fn handle_account_logout(client: Arc<Mutex<Client>>, username: &String, pubk
     }
     
     let mut c = lock_client(&client)?;
+    let peer = c.addr;
     c.state = ClientState::Guest;
     let _ = crate::shared::utils::send_message_locked(&mut c, "/GUEST_STATE");
     let _ = crate::shared::utils::send_success_locked(&mut c, &format!("Logged out: {username}"));
+    log_event(&peer, Some(username), None, "Logged out");
     
     Ok(CommandResult::Handled)
 }

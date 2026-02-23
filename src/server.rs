@@ -12,7 +12,7 @@ use crate::backend::parser::{Command, parse_command};
 use crate::backend::dispatcher::{dispatch_command, CommandResult};
 use crate::backend::command_utils::{sync_room_members, unix_timestamp};
 use crate::shared::types::{Client, ClientState, Clients, PublicKeys, Room, Rooms};
-use crate::shared::utils::{check_mute, format_broadcast, lock_client, lock_clients, lock_room, lock_rooms};
+use crate::shared::utils::{check_mute, format_broadcast, lock_client, lock_clients, lock_room, lock_rooms, log_event};
 
 pub fn session_housekeeper(clients: Clients, rooms: Rooms, pubkeys: PublicKeys) -> std::io::Result<()> {
     loop {
@@ -149,7 +149,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
         locked.insert(peer, Arc::clone(&client_arc));
     }
 
-    println!("Address {peer} connected");
+    log_event(&peer, None, None, "Connected to server");
 
     for line in reader.lines() {
         match line {
@@ -160,18 +160,31 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
                 {
                     let mut s = lock_client(&client_arc)?;
-                    if let ClientState::InRoom { inactive_time, is_afk, .. } = &mut s.state {
+                    let should_broadcast = if let ClientState::InRoom { inactive_time, is_afk, room, .. } = &mut s.state {
+                        let was_afk = *is_afk;
                         *inactive_time = Some(SystemTime::now());
                         *is_afk = false;
+
+                        if was_afk {
+                            Some(room.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    drop(s);
+                    if let Some(room_name) = should_broadcast {
+                        let _ = crate::shared::utils::broadcast_user_list(&clients, &rooms, &room_name);
                     }
                 }
 
                 if msg.starts_with("/") {
                     if let Some(rest) = msg.strip_prefix("/members? ") {
-                        let (username, room_name) = {
+                        let (username, room_name, requester_ignore) = {
                             let client = lock_client(&client_arc)?;
                             match &client.state {
-                                ClientState::InRoom { username, room, .. } => (username.clone(), room.clone()),
+                                ClientState::InRoom { username, room, .. } => (username.clone(), room.clone(), client.ignore_list.clone()),
                                 _ => {
                                     let mut client = lock_client(&client_arc)?;
                                     writeln!(client.stream, "{}", "You are not in a room".yellow())?;
@@ -236,11 +249,11 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                                     if let Ok(client) = arc.try_lock() {
                                         if let ClientState::InRoom { username: u, room: r, .. } = &client.state {
                                             if u == target && r == &room_name {
-                                                let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
-                                                if is_hidden && !can_see_hidden {
+                                                if requester_ignore.iter().any(|x| x == target) {
                                                     continue;
                                                 }
-                                                if client.ignore_list.contains(&username) {
+                                                let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
+                                                if is_hidden && !can_see_hidden {
                                                     continue;
                                                 }
                                                 if let Some(key) = pubkeys_map.get(u) {
@@ -259,11 +272,11 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                                     if let Ok(client) = arc.try_lock() {
                                         if let ClientState::InRoom { username: u, room: r, .. } = &client.state {
                                             if r == &room_name && u != &username {
-                                                let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
-                                                if is_hidden && !can_see_hidden {
+                                                if requester_ignore.contains(u) {
                                                     continue;
                                                 }
-                                                if client.ignore_list.contains(&username) {
+                                                let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
+                                                if is_hidden && !can_see_hidden {
                                                     continue;
                                                 }
                                                 if let Some(key) = pubkeys_map.get(u) {
@@ -283,11 +296,11 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                                     if let Ok(client) = arc.try_lock() {
                                         if let ClientState::InRoom { username: u, room: r, .. } = &client.state {
                                             if r == &room_name {
-                                                let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
-                                                if is_hidden && !can_see_hidden {
+                                                if requester_ignore.contains(u) {
                                                     continue;
                                                 }
-                                                if client.ignore_list.contains(&username) {
+                                                let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
+                                                if is_hidden && !can_see_hidden {
                                                     continue;
                                                 }
                                                 if let Some(key) = pubkeys_map.get(u) {
@@ -369,6 +382,9 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                         }).cloned()
                         {
                             let mut rec = lock_client(&rec_arc)?;
+                            if rec.ignore_list.contains(&username) {
+                                continue;
+                            }
                             writeln!(rec.stream, "/enc {} {}: {}", role_prefix, display_name, ciphertext)?;
                         }
                     }
@@ -396,10 +412,10 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
         let client = lock_client(&client_arc)?;
 
         match &client.state {
-            ClientState::Guest => println!("Guest ({peer}) disconnected"),
-            ClientState::LoggedIn { username } => println!("{username} ({peer}) disconnected"),
+            ClientState::Guest => log_event(&peer, None, None, "Disconnected from server"),
+            ClientState::LoggedIn { username } => log_event(&peer, Some(username), None, "Disconnected from server"),
             ClientState::InRoom { username, room, .. } => {
-                println!("{username} ({peer}) disconnected from {room}");
+                log_event(&peer, Some(username), Some(room), &format!("Disconnected from room {}", room));
                 let uname = username.clone();
                 let rname = room.clone();
                 {
@@ -412,6 +428,7 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                 }
                 let _ = sync_room_members(&rooms, &clients, &pubkeys, &rname);
                 let _ = unix_timestamp(&rooms, &rname, &uname);
+                let _ = crate::shared::utils::broadcast_user_list(&clients, &rooms, &rname);
             }
         }
     }

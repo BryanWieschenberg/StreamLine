@@ -4,7 +4,7 @@ use std::sync::mpsc::Sender;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::frontend::app::{AppMessage, ClientState, MY_STATE, CURRENT_USER, CURRENT_ROOM, MY_ROLE, ALLOWED_COMMANDS, MEMBERS};
+use crate::frontend::app::{AppMessage, ClientState, MY_STATE, CURRENT_USER, CURRENT_ROOM, MY_ROLE, ALLOWED_COMMANDS, MEMBERS, AVAILABLE_ROOMS, VISIBLE_USERS};
 use crate::shared::crypto::{generate_or_load_keys, decrypt};
 
 pub fn handle_control_packets(stream: &mut TcpStream, msg: &str, tx: &Sender<AppMessage>) -> std::io::Result<()> {
@@ -105,6 +105,43 @@ pub fn handle_control_packets(stream: &mut TcpStream, msg: &str, tx: &Sender<App
         if let Ok(mut members) = lock.lock() {
             members.clear();
             cvar.notify_all();
+        }
+        return Ok(());
+    }
+
+    if let Some(rooms_str) = msg.strip_prefix("/ROOMS ") {
+        let mut rooms = Vec::new();
+        for pair in rooms_str.split_whitespace() {
+            if let Some((name, count_str)) = pair.split_once(':') {
+                if let Ok(count) = count_str.parse::<usize>() {
+                    rooms.push((name.to_string(), count));
+                }
+            }
+        }
+        if let Ok(mut r) = AVAILABLE_ROOMS.lock() {
+            *r = rooms;
+        }
+        return Ok(());
+    }
+
+    if msg == "/ROOMS" {
+        if let Ok(mut r) = AVAILABLE_ROOMS.lock() {
+            r.clear();
+        }
+        return Ok(());
+    }
+
+    if let Some(users_str) = msg.strip_prefix("/USERS ") {
+        let users: Vec<String> = users_str.split('\x1F').map(String::from).collect();
+        if let Ok(mut u) = VISIBLE_USERS.lock() {
+            *u = users;
+        }
+        return Ok(());
+    }
+
+    if msg == "/USERS" {
+        if let Ok(mut u) = VISIBLE_USERS.lock() {
+            u.clear();
         }
         return Ok(());
     }

@@ -91,7 +91,7 @@ pub fn loggedin_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
         Command::Account => account::handle_account(client, username),
 
         Command::RoomList => rooms::handle_room_list(client, rooms, username),
-        Command::RoomCreate { name, whitelist } => rooms::handle_room_create(client, rooms, username, &name, whitelist),
+        Command::RoomCreate { name, whitelist } => rooms::handle_room_create(client, clients, rooms, username, &name, whitelist),
         Command::RoomJoin { name } => rooms::handle_room_join(client, clients, rooms, pubkeys, username, &name),
         Command::RoomImport { filename } => rooms::handle_room_import(client, rooms, &filename),
         Command::RoomDelete { name, force } => rooms::handle_room_delete(client, clients, rooms, username, &name, force),

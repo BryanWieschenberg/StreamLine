@@ -316,6 +316,17 @@ pub fn sync_room_members(rooms: &Rooms, clients: &Clients, pubkeys: &PublicKeys,
         clients_guard.values().cloned().collect()
     };
 
+    let mut ignore_map: HashMap<String, HashSet<String>> = HashMap::new();
+    for arc in &client_arcs {
+        if let Ok(c) = arc.lock() {
+            if let ClientState::InRoom { username, room, .. } = &c.state {
+                if room == room_name {
+                    ignore_map.insert(username.clone(), c.ignore_list.iter().cloned().collect());
+                }
+            }
+        }
+    }
+
     for arc in client_arcs {
         let mut c = lock_client(&arc)?;
         if let ClientState::InRoom { username: recipient, room: rname, .. } = &c.state {
@@ -332,7 +343,7 @@ pub fn sync_room_members(rooms: &Rooms, clients: &Clients, pubkeys: &PublicKeys,
                 if is_hidden && !can_see_hidden {
                     continue;
                 }
-                
+
                 if let Some(key) = pkeys.get(uname) {
                     pairs.push(format!("{uname}:{key}"));
                 }

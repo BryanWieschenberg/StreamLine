@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::frontend::app::App;
+use crate::frontend::app::{App, AVAILABLE_ROOMS, VISIBLE_USERS, MY_STATE, ClientState};
 
 pub const C_BG: Color = Color::Rgb(18, 18, 18);
 pub const C_SURFACE: Color = Color::Rgb(28, 28, 28);
@@ -332,7 +332,22 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     .alignment(Alignment::Left);
     f.render_widget(title, chunks[0]);
 
-    let msg_area = chunks[1];
+    let state = MY_STATE.lock().ok();
+    let is_guest = matches!(state.as_deref(), Some(ClientState::Guest) | None);
+    
+    let (msg_area, panel_area) = if is_guest {
+        (chunks[1], chunks[1])
+    } else {
+        let msg_panel_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(80),
+                Constraint::Percentage(20),
+            ])
+            .split(chunks[1]);
+        (msg_panel_chunks[0], msg_panel_chunks[1])
+    };
+    
     let inner_height = msg_area.height.saturating_sub(2) as usize;
     let inner_width = msg_area.width.saturating_sub(2) as usize;
 
@@ -374,6 +389,74 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         .block(messages_block);
 
     f.render_widget(msg_list, msg_area);
+
+    if !is_guest {
+        match state.as_deref() {
+            Some(ClientState::LoggedIn) => {
+                let rooms = AVAILABLE_ROOMS.lock().ok().map(|r| r.clone()).unwrap_or_default();
+                let room_items: Vec<ListItem> = if rooms.is_empty() {
+                    vec![ListItem::new(Line::from(Span::styled(
+                        "  No rooms available",
+                        Style::default().fg(C_DIM)
+                    )))]
+            } else {
+                rooms.iter().map(|(name, count)| {
+                    let text = if *count == 1 {
+                        format!("{name} ({count} user)")
+                    } else {
+                        format!("{name} ({count} users)")
+                    };
+                    ListItem::new(Line::from(Span::styled(text, Style::default().fg(C_TEXT))))
+                }).collect()
+            };
+            
+            let panel_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(C_BORDER))
+                .title(Span::styled(" Rooms ", Style::default().fg(C_DIM)))
+                .style(Style::default().bg(C_BG));
+            
+            let panel_list = List::new(room_items).block(panel_block);
+            f.render_widget(panel_list, panel_area);
+        }
+        Some(ClientState::InRoom) => {
+            let users = VISIBLE_USERS.lock().ok().map(|u| u.clone()).unwrap_or_default();
+            let user_items: Vec<ListItem> = if users.is_empty() {
+                vec![ListItem::new(Line::from(Span::styled(
+                    "  No users online",
+                    Style::default().fg(C_DIM)
+                )))]
+            } else {
+                users.iter().map(|formatted_user| {
+                    let line = if formatted_user.contains('\x1b') {
+                        parse_ansi(formatted_user)
+                    } else {
+                        Line::from(Span::styled(
+                            formatted_user.clone(),
+                            Style::default().fg(C_TEXT)
+                        ))
+                    };
+
+                    let mut spans = vec![Span::styled("".to_string(), Style::default())];
+                    spans.extend(line.spans);
+                    ListItem::new(Line::from(spans))
+                }).collect()
+            };
+            
+            let panel_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(C_BORDER))
+                .title(Span::styled(" Users ", Style::default().fg(C_DIM)))
+                .style(Style::default().bg(C_BG));
+            
+            let panel_list = List::new(user_items).block(panel_block);
+            f.render_widget(panel_list, panel_area);
+            }
+            _ => {}
+        }
+    }
 
     let input_area = chunks[2];
 

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::shared::types::{Client, ClientState, Clients, Rooms, RoomUser};
-use crate::shared::utils::{lock_client, lock_rooms, lock_room, save_rooms_to_disk, ColorizeExt, send_message_locked, send_error_locked, send_success_locked};
+use crate::shared::utils::{lock_client, lock_rooms, lock_room, save_rooms_to_disk, ColorizeExt, send_message_locked, send_error_locked, send_success_locked, broadcast_user_list};
 use crate::backend::dispatcher::CommandResult;
 use crate::backend::command_utils::{RESTRICTED_COMMANDS, command_order, sync_room_commands};
 
@@ -329,7 +329,7 @@ pub fn handle_super_roles_assign(client: Arc<Mutex<Client>>, clients: &Clients, 
     Ok(CommandResult::Handled)
 }
 
-pub fn handle_super_roles_recolor(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String, role: &String, color: &String) -> io::Result<CommandResult> {
+pub fn handle_super_roles_recolor(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, room: &String, role: &String, color: &String) -> io::Result<CommandResult> {
     let hex = color.trim().trim_start_matches('#');
     if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
         let mut c = lock_client(&client)?;
@@ -375,5 +375,6 @@ pub fn handle_super_roles_recolor(client: Arc<Mutex<Client>>, rooms: &Rooms, roo
         c.stream.flush()?;
     }
 
+    let _ = broadcast_user_list(clients, rooms, room);
     Ok(CommandResult::Handled)
 }

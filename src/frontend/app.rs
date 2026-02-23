@@ -18,6 +18,10 @@ pub static CURRENT_ROOM: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::n
 pub static MY_ROLE: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
 pub static ALLOWED_COMMANDS: Lazy<Mutex<Vec<String>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
+pub static AVAILABLE_ROOMS: Lazy<Mutex<Vec<(String, usize)>>> = Lazy::new(|| Mutex::new(Vec::new()));
+
+pub static VISIBLE_USERS: Lazy<Mutex<Vec<String>>> = Lazy::new(|| Mutex::new(Vec::new()));
+
 pub fn get_room_members() -> HashMap<String, String> {
     let (lock, _) = &*MEMBERS;
     match lock.lock() {

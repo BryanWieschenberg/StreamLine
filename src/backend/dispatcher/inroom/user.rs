@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::shared::types::{Client, ClientState, Rooms, Clients, PublicKeys};
-use crate::shared::utils::{lock_client, lock_rooms, lock_room, save_rooms_to_disk, send_message_locked, send_error_locked, send_success_locked, ColorizeExt};
+use crate::shared::utils::{lock_client, lock_rooms, lock_room, save_rooms_to_disk, send_message_locked, send_error_locked, send_success_locked, ColorizeExt, broadcast_user_list};
 use crate::backend::command_utils::sync_room_members;
 use crate::backend::dispatcher::CommandResult;
 
@@ -60,7 +60,7 @@ pub fn handle_users(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String) ->
     Ok(CommandResult::Handled)
 }
 
-pub fn handle_users_rename(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String, old_name: &String, new_name: &String) -> io::Result<CommandResult> {
+pub fn handle_users_rename(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, pubkeys: &PublicKeys, room: &String, old_name: &String, new_name: &String) -> io::Result<CommandResult> {
     let rooms_map = lock_rooms(rooms)?;
     let room_arc = match rooms_map.get(room) {
         Some(r) => Arc::clone(r),
@@ -113,12 +113,18 @@ pub fn handle_users_rename(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &Str
             }
         }
         drop(room_guard);
+        drop(room_arc);
+    }
 
-        if let Err(e) = save_rooms_to_disk(&rooms_map) {
+    drop(rooms_map);
+
+    {
+        let fresh_map = lock_rooms(rooms)?;
+        let mut c = lock_client(&client)?;
+        if let Err(e) = save_rooms_to_disk(&fresh_map) {
             send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
             return Ok(CommandResult::Handled);
         }
-
         if new_name == "reset" || new_name == "*" {
             send_success_locked(&mut c, &format!("Nickname for {old_name} reset"))?;
         } else {
@@ -126,10 +132,12 @@ pub fn handle_users_rename(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &Str
         }
     }
 
+    let _ = sync_room_members(rooms, clients, pubkeys, room);
+    let _ = broadcast_user_list(clients, rooms, room);
     Ok(CommandResult::Handled)
 }
 
-pub fn handle_users_recolor(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &String, target_user: &String, color: &String) -> io::Result<CommandResult> {
+pub fn handle_users_recolor(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, pubkeys: &PublicKeys, room: &String, target_user: &String, color: &String) -> io::Result<CommandResult> {
     let rooms_map = lock_rooms(rooms)?;
     let room_arc = match rooms_map.get(room) {
         Some(r) => Arc::clone(r),
@@ -169,7 +177,7 @@ pub fn handle_users_recolor(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &St
     }
 
     let c_str = color.trim().trim_start_matches('#');
-    let formatted_color = if c_str == "reset" {
+    let formatted_color = if c_str == "reset" || c_str == "*" {
         String::new()
     } else {
         if c_str.len() != 6 || !c_str.chars().all(|c| c.is_ascii_hexdigit()) {
@@ -193,12 +201,18 @@ pub fn handle_users_recolor(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &St
             }
         }
         drop(room_guard);
+        drop(room_arc);
+    }
 
-        if let Err(e) = save_rooms_to_disk(&rooms_map) {
+    drop(rooms_map);
+
+    {
+        let fresh_map = lock_rooms(rooms)?;
+        let mut c = lock_client(&client)?;
+        if let Err(e) = save_rooms_to_disk(&fresh_map) {
             send_error_locked(&mut c, &format!("Failed to save rooms: {e}"))?;
             return Ok(CommandResult::Handled);
         }
-
         if formatted_color.is_empty() {
             send_success_locked(&mut c, "Color cleared")?;
         } else {
@@ -208,6 +222,8 @@ pub fn handle_users_recolor(client: Arc<Mutex<Client>>, rooms: &Rooms, room: &St
         }
     }
 
+    let _ = sync_room_members(rooms, clients, pubkeys, room);
+    let _ = broadcast_user_list(clients, rooms, room);
     Ok(CommandResult::Handled)
 }
 
@@ -253,5 +269,6 @@ pub fn handle_users_hide(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &
     }
 
     let _ = sync_room_members(rooms, clients, pubkeys, room);
+    let _ = broadcast_user_list(clients, rooms, room);
     Ok(CommandResult::Handled)
 }
