@@ -181,10 +181,10 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
 
                 if msg.starts_with("/") {
                     if let Some(rest) = msg.strip_prefix("/members? ") {
-                        let (username, room_name, requester_ignore) = {
+                        let (username, room_name) = {
                             let client = lock_client(&client_arc)?;
                             match &client.state {
-                                ClientState::InRoom { username, room, .. } => (username.clone(), room.clone(), client.ignore_list.clone()),
+                                ClientState::InRoom { username, room, .. } => (username.clone(), room.clone()),
                                 _ => {
                                     let mut client = lock_client(&client_arc)?;
                                     writeln!(client.stream, "{}", "You are not in a room".yellow())?;
@@ -249,9 +249,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                                     if let Ok(client) = arc.try_lock() {
                                         if let ClientState::InRoom { username: u, room: r, .. } = &client.state {
                                             if u == target && r == &room_name {
-                                                if requester_ignore.iter().any(|x| x == target) {
-                                                    continue;
-                                                }
                                                 let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
                                                 if is_hidden && !can_see_hidden {
                                                     continue;
@@ -272,9 +269,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                                     if let Ok(client) = arc.try_lock() {
                                         if let ClientState::InRoom { username: u, room: r, .. } = &client.state {
                                             if r == &room_name && u != &username {
-                                                if requester_ignore.contains(u) {
-                                                    continue;
-                                                }
                                                 let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
                                                 if is_hidden && !can_see_hidden {
                                                     continue;
@@ -296,9 +290,6 @@ fn handle_client(stream: TcpStream, peer: SocketAddr, clients: Clients, rooms: R
                                     if let Ok(client) = arc.try_lock() {
                                         if let ClientState::InRoom { username: u, room: r, .. } = &client.state {
                                             if r == &room_name {
-                                                if requester_ignore.contains(u) {
-                                                    continue;
-                                                }
                                                 let is_hidden = online_in_room.get(u).cloned().unwrap_or(false);
                                                 if is_hidden && !can_see_hidden {
                                                     continue;

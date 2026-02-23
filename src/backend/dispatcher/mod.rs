@@ -20,7 +20,7 @@ pub fn dispatch_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clie
         let locked = lock_client(&client)?;
         locked.state.clone()
     };
-    
+
     match state {
         ClientState::Guest => guest::guest_command(cmd, client, clients, rooms),
         ClientState::LoggedIn { username } => loggedin::loggedin_command(cmd, client, clients, rooms, &username, pubkeys),

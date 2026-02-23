@@ -46,14 +46,6 @@ pub fn handle_dm(client: Arc<Mutex<Client>>, clients: &Clients, rooms: &Rooms, u
         return Ok(CommandResult::Handled);
     }
 
-    {
-        let root_client = lock_client(&client)?;
-        if root_client.ignore_list.contains(recipient) {
-            send_message(&client, &format!("Cannot send message to {recipient}, you have them ignored").yellow().to_string())?;
-            return Ok(CommandResult::Handled);
-        }
-    }
-
     let clients_map = lock_clients(clients)?;
     let mut found = false;
     for client_arc in clients_map.values() {

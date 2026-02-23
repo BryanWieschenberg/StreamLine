@@ -47,11 +47,15 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
             Ok(CommandResult::Stop)
         }
 
-        Command::Leave | Command::Status | Command::AFK | Command::Announce { .. } | Command::Seen { .. } | Command::DM { .. } | Command::Me { .. } | Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } |
+        Command::Leave | Command::Status | Command::AFK | Command::Announce { .. } | Command::Seen { .. } | Command::DM { .. } | Command::Me { .. } |
         Command::SuperUsers | Command::SuperRename { .. } | Command::SuperExport { .. } | Command::SuperWhitelist | Command::SuperWhitelistToggle | Command::SuperWhitelistAdd { .. } | Command::SuperWhitelistRemove { .. } | Command::SuperLimit | Command::SuperLimitRate { .. } | Command::SuperLimitSession { .. } | Command::SuperRoles | Command::SuperRolesAdd { .. } | Command::SuperRolesRevoke { .. } | Command::SuperRolesAssign { .. } | Command::SuperRolesRecolor { .. } |
         Command::Users | Command::UsersRename { .. } | Command::UsersRecolor { .. } | Command::UsersHide |
         Command::ModInfo | Command::ModKick { .. } | Command::ModMute { .. } | Command::ModUnmute { .. } | Command::ModBan { .. } | Command::ModUnban { .. } => {
-            send_message(&client, &"Must be in a room to perform this command".yellow().to_string())?;
+            send_message(&client, &"Must be logged in to perform this command".yellow().to_string())?;
+            Ok(CommandResult::Handled)
+        }
+        Command::IgnoreList | Command::IgnoreAdd { .. } | Command::IgnoreRemove { .. } => {
+            send_message(&client, &"Must be logged in to manage your ignore list".yellow().to_string())?;
             Ok(CommandResult::Handled)
         }
 

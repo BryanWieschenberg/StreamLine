@@ -69,6 +69,7 @@ impl ToString for Command {
     }
 }
 
+#[derive(Clone)]
 pub enum Command {
     Help,
     Ping { start_time: Option<u128> },
