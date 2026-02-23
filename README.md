@@ -62,7 +62,7 @@ StreamLine employs a client-server architecture with strict separation of concer
 
 ### Performance & Benchmarks
 
-StreamLine is engineered for high-throughput, ultra-low-latency communication. The following metrics represent the **Software Processing Ceiling**, measured on a local Linux loopback interface to isolate the application's efficiency from physical network variables:
+StreamLine is engineered for high-throughput, ultra-low-latency communication. The following metrics represent the software orocessing ceiling measured on a local Linux loopback interface to isolate the application's efficiency from physical network variables:
 
 1. **Massive Concurrency**: System is stable and responsive with over 1,000 simultaneous TCP connections, utilizing only ~25MB of server RAM under peak stress.
 2. **Deterministic Processing**: Average round trip time of ~3ms under extreme load (1,000 parallel clients).
