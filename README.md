@@ -46,8 +46,8 @@ StreamLine employs a client-server architecture with strict separation of concer
 
 ## Trade-offs & Design Decisions
 
-- **Rust over higher-level languages:** StreamLine is written entirely in Rust rather than a more accessible language like Go. **Trade-off:** Rust's ownership model has a steeper learning curve and longer initial development time. However, it provides compile-time memory safety guarantees and zero-cost abstractions, eliminating entire classes of bugs and making the high-throughput async architecture significantly more reliable.
-- **Client-Side E2EE over server-managed encryption:** Encryption and decryption are performed exclusively on the client. **Trade-off:** This limits the server's ability to perform server-side filtering or content moderation, but provides zero-knowledge message delivery, ensuring that even a compromised server cannot expose non-commands payloads.
+- **Rust over Higher-Level Languages:** StreamLine is written entirely in Rust rather than a more accessible language like Go. **Trade-off:** Rust's ownership model has a steeper learning curve and longer initial development time. However, it provides compile-time memory safety guarantees and zero-cost abstractions, eliminating entire classes of bugs and making the high-throughput async architecture significantly more reliable.
+- **Client-Side E2EE over Server-Managed Encryption:** Encryption and decryption are performed exclusively on the client. **Trade-off:** This limits the server's ability to perform server-side filtering or content moderation, but provides zero-knowledge message delivery, ensuring that even a compromised server cannot expose non-commands payloads.
 - **RBAC at the Dispatcher Level:** Permission checks are evaluated before command logic is invoked, rather than within individual command handlers. **Trade-off:** This adds a layer of indirection to the dispatch pipeline, but ensures authorization is a system-wide invariant rather than a per-command responsibility, making the security model far more maintainable and scalable.
 - **Local JSON Persistence over a Database:** Server state is persisted to structured JSON files rather than an embedded or external database. **Trade-off:** JSON is less query-efficient than a relational store, but eliminates external dependencies, minimizing setup overhead.
 - **Single-Threaded over Full Parallelism:** The message dispatcher intentionally uses a locked-client, single-threaded model for command processing. **Trade-off:** This caps theoretical maximum throughput, but the single-threaded model also sustains more than sufficient performance for LAN-scale concurrency, as validated by several stress tests.
@@ -127,7 +127,7 @@ StreamLine is engineered for high-throughput, ultra-low-latency communication. T
 
 ## Installation & Setup
 
-1. Clone the repository with `git clone https://github.com/BryanWieschenberg/StreamLine.git` and enter the directory with `cd Streamline`.
+1. Clone the repository with `git clone https://github.com/BryanWieschenberg/StreamLine.git` and enter the directory with `cd StreamLine`.
 2. Install [Rust](https://rustup.rs/#).
 3. Run the server:
 
