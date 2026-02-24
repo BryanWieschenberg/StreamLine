@@ -102,6 +102,8 @@ StreamLine is engineered for high-throughput, ultra-low-latency communication. T
 
 ## Role-Command Mapping
 
+For a more detailed look at how the command system works and what each command does, consult [docs/commands.md](/docs/commands.md).
+
 - **Owner**: Access to all commands and full room control, including ownership transfer and room deletion.
 - **Admin**: Access to all commands.
 - **Moderator/User**: Contextual permissions that can be expanded via `/super roles add` or removed via `/super roles revoke` commands.
