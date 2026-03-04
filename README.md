@@ -74,13 +74,13 @@ StreamLine is engineered for high-throughput, ultra-low-latency communication. T
 
 ## Tech Stack
 
-| Category      | Technologies                    |
-| ------------- | ------------------------------- |
-| **Frontend**  | Ratatui, Crossterm, Colored     |
-| **Backend**   | Rust, Once Cell                 |
-| **Security**  | RSA, SHA-2, PKCS#8, Base64, Hex |
-| **Data**      | Serde, Serde JSON               |
-| **Utilities** | Chrono, Regex, Rand             |
+| Category      | Technologies                      |
+| ------------- | --------------------------------- |
+| **Frontend**  | Rust, Ratatui, Crossterm, Colored |
+| **Backend**   | Rust, Once Cell                   |
+| **Security**  | RSA, SHA-256, PKCS#8, Base64, Hex |
+| **Data**      | Serde, Serde JSON                 |
+| **Utilities** | Chrono, Regex, Rand               |
 
 ## Images
 
