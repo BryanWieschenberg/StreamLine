@@ -1,4 +1,4 @@
-## Commands
+# Commands
 
 Most commands are dependent on the client's current state (e.g., guest, logged in, in-room) and, if in a room, role. In each room, there are 4 roles: Owner, Admin, Moderator, and User. The Moderator and User roles can have commands be added to or revoked from their usage, while Owners and Admins retain the ability to use all commands. There is only 1 Owner per room, and the Owner of a room is fully protected from being assigned a lower role, and is the only one allowed to delete their own room. Many commands rely on the data present in local storage, located in `/data/users.json` and `/data/rooms.json`.
 
@@ -85,7 +85,7 @@ Many commands have shorter, more concise variations for more experienced users. 
   - `recolor <user|mod|admin|owner> <hex_color>` - Sets the color for the specified role's prefix
 StreamLine employs a client-server architecture with strict separation of concerns across the TUI frontend, TCP transport, server dispatch pipeline, and security subsystems.
 
-#### Addable/Revokeable Commands
+#### Addable/Revocable Commands
 
 Many commands can be added to or revoked from the User/Moderator roles. These codes can be used as arguments in the `/super roles add` or `/super roles revoke` commands. Some of these are parent codes (e.g. `super`), meaning if a role has the parent code, they can access all child commands (e.g. `super.users`, `super.rename`, etc.). If they have child codes, they can only access those specific child commands:
 
