@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use colored::*;
 
 use crate::backend::parser::Command;
-use crate::backend::command_utils::{help_msg_guest, generate_hash, is_user_logged_in};
+use crate::backend::command_utils::{help_msg_guest, hash_password, verify_password, is_user_logged_in};
 use crate::shared::types::{Client, ClientState, Clients, Rooms};
 use crate::shared::utils::{lock_client, lock_clients, lock_users_storage, load_json, save_json, send_message, send_error, send_success, log_event, broadcast_room_list};
 use super::CommandResult;
@@ -85,7 +85,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
                 return Ok(CommandResult::Handled);
             }
 
-            let password_hash = generate_hash(&password);
+            let password_hash = hash_password(&password)?;
 
             users[&username] = json!({
                 "password": password_hash,
@@ -136,7 +136,7 @@ pub fn guest_command(cmd: Command, client: Arc<Mutex<Client>>, clients: &Clients
                             return Ok(CommandResult::Handled);
                         }
                     };
-                    if generate_hash(&password) == stored_hash {
+                    if verify_password(&password, stored_hash) {
                         let mut client = lock_client(&client)?;
                         let peer = client.addr;
                         client.state = ClientState::LoggedIn { username: username.clone() };

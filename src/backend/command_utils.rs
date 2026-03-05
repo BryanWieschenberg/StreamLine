@@ -1,6 +1,6 @@
 use std::collections::{HashSet, HashMap};
 use once_cell::sync::Lazy;
-use sha2::{Sha256, Digest};
+use argon2::{Argon2, PasswordHasher, PasswordVerifier, password_hash::{SaltString, rand_core::OsRng}};
 use colored::Colorize;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
@@ -115,12 +115,23 @@ pub fn help_msg_inroom(extra_cmds: Vec<&str>) -> String {
 
 
 
-pub fn generate_hash(input: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(input);
-    let result = hasher.finalize();
+pub fn hash_password(password: &str) -> Result<String, io::Error> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    argon2
+        .hash_password(password.as_bytes(), &salt)
+        .map(|h| h.to_string())
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+}
 
-    hex::encode(result)
+pub fn verify_password(password: &str, hash: &str) -> bool {
+    let parsed_hash = match argon2::PasswordHash::new(hash) {
+        Ok(h) => h,
+        Err(_) => return false,
+    };
+    Argon2::default()
+        .verify_password(password.as_bytes(), &parsed_hash)
+        .is_ok()
 }
 
 pub fn is_user_logged_in(clients: &Clients, username: &str) -> bool {

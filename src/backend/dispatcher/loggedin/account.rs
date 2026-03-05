@@ -9,7 +9,7 @@ use colored::*;
 use crate::shared::types::{Client, ClientState, PublicKeys};
 use crate::shared::utils::{lock_client, lock_users_storage, load_json, save_json, send_error, send_success, send_error_locked, send_message_locked, send_success_locked, log_event};
 use crate::backend::dispatcher::CommandResult;
-use crate::backend::command_utils::generate_hash;
+use crate::backend::command_utils::{hash_password, verify_password};
 
 pub fn handle_account_logout(client: Arc<Mutex<Client>>, username: &String, pubkeys: &PublicKeys) -> io::Result<CommandResult> {
     {
@@ -91,12 +91,12 @@ pub fn handle_account_edit_password(client: Arc<Mutex<Client>>, username: &Strin
         }
     };
 
-    if generate_hash(&current_password) != stored_hash {
+    if !verify_password(&current_password, stored_hash) {
         send_error(&client, "Incorrect current password")?;
         return Ok(CommandResult::Handled);
     }
 
-    let new_hash = generate_hash(&new_password);
+    let new_hash = hash_password(&new_password)?;
     user_obj["password"] = Value::String(new_hash);
 
     save_json("data/users.json", &users)?;
